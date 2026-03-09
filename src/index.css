@@ -1,0 +1,65 @@
+@import url('https://fonts.googleapis.com/css2?family=EB+Garamond:ital,wght@0,400..800;1,400..800&family=JetBrains+Mono:ital,wght@0,100..800;1,100..800&family=Inter:wght@400;500;600;700&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: #F5F5F7;
+    --foreground: #000000;
+    --accent: #000000;
+  }
+
+  body {
+    @apply bg-background text-foreground font-sans selection:bg-accent selection:text-white;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  h1,
+  h2,
+  h3,
+  h4,
+  h5,
+  h6 {
+    @apply font-sans tracking-tight;
+  }
+}
+
+@layer components {
+  .card {
+    @apply bg-card border border-foreground/10 rounded-2xl p-6 backdrop-blur-sm transition-all;
+  }
+
+  .btn-primary {
+    @apply bg-accent text-white px-6 py-3 rounded-xl font-sans font-medium hover:bg-black/80 transition-all active:scale-95 disabled:opacity-50;
+  }
+
+  .btn-secondary {
+    @apply border border-foreground/20 hover:border-foreground/40 px-6 py-3 rounded-xl font-sans font-medium transition-all active:scale-95 disabled:opacity-50;
+  }
+
+  /* Progress ring styles */
+  .progress-ring {
+    @apply relative flex items-center justify-center;
+  }
+}
+
+/* Custom scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #D1D1D6;
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #AEAEB2;
+}
