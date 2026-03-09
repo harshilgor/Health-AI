@@ -93,7 +93,8 @@ export default function App() {
         try {
             // Clean base64 (remove data:image/...;base64,)
             const cleanBase64 = base64.split(',')[1];
-            const result = await analyzeMeal(profile.api_key, cleanBase64, mediaType, profile, meals.slice(0, 3));
+            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY;
+            const result = await analyzeMeal(apiKey, cleanBase64, mediaType, profile, meals.slice(0, 3));
             setAnalysisResult(result);
         } catch (err) {
             console.error(err);
