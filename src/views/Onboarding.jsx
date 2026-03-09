@@ -5,7 +5,7 @@ import { ChevronRight, ArrowLeft } from 'lucide-react';
 export default function Onboarding({ onComplete }) {
     const [step, setStep] = useState(0);
     const [profile, setProfile] = useState({
-        api_key: import.meta.env.VITE_ANTHROPIC_API_KEY || '',
+        api_key: import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY || '',
         goal: 'Eater healthier generally',
         conditions: 'None',
         age: 30,
@@ -45,7 +45,7 @@ export default function Onboarding({ onComplete }) {
     };
 
     const finish = () => {
-        const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY;
+        const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
         if (!apiKey) return alert("Please enter an API Key or add VITE_ANTHROPIC_API_KEY to your .env file");
         const targets = calculateTargets(profile);
         const fullProfile = { ...profile, api_key: apiKey, ...targets, joined: new Date().toISOString() };

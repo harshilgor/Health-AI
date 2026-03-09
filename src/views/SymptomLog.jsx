@@ -44,7 +44,7 @@ export default function SymptomLog({ profile, logs = [], meals = [], onLog }) {
         if (logs.length < 7) return;
         setAnalyzing(true);
         try {
-            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY;
+            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
             const data = await correlateSymptoms(apiKey, meals, logs);
             setInsights(data);
         } catch (e) {

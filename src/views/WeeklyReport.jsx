@@ -42,7 +42,7 @@ export default function WeeklyReport({ profile, meals = [] }) {
         setLoading(true);
         setError(null);
         try {
-            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY;
+            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
             const data = await generateWeeklyReport(apiKey, weeklyMeals);
             setReport(data);
         } catch (e) {

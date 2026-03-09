@@ -93,7 +93,7 @@ export default function App() {
         try {
             // Clean base64 (remove data:image/...;base64,)
             const cleanBase64 = base64.split(',')[1];
-            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY;
+            const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
             const result = await analyzeMeal(apiKey, cleanBase64, mediaType, profile, meals.slice(0, 3));
             setAnalysisResult(result);
         } catch (err) {
@@ -115,7 +115,32 @@ export default function App() {
         setSymptoms([symptomData, ...symptoms]);
     };
 
+    const envApiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
+
+    useEffect(() => {
+        if (!profile && envApiKey) {
+            const defaultProfile = {
+                api_key: envApiKey,
+                goal: 'Eat healthier generally',
+                conditions: 'None',
+                age: 30,
+                sex: 'male',
+                activity: 'Lightly active',
+                daily_calories: 2000,
+                protein_target: 125,
+                fat_target: 67,
+                carb_target: 225,
+                fiber_target: 30,
+                joined: new Date().toISOString()
+            };
+            setProfile(defaultProfile);
+        }
+    }, []);
+
     if (!profile) {
+        if (envApiKey) {
+            return <PulseBackground />;
+        }
         return (
             <>
                 <PulseBackground />
