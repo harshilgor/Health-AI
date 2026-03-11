@@ -58,18 +58,7 @@ export default function Onboarding({ onComplete }) {
             title: "Welcome to Nouris",
             content: (
                 <div className="space-y-6">
-                    <p className="text-muted text-lg">Your personal nutrition scientist is ready to analyze. Let's start with your Anthropic API Key.</p>
-                    <div className="space-y-2">
-                        <label className="font-mono text-xs uppercase tracking-widest text-accent">Anthropic API Key</label>
-                        <input
-                            type="password"
-                            placeholder="sk-ant-..."
-                            className="w-full bg-card border border-foreground/10 p-4 rounded-xl focus:outline-none focus:border-accent font-mono"
-                            value={profile.api_key}
-                            onChange={(e) => setProfile({ ...profile, api_key: e.target.value })}
-                        />
-                        <p className="text-[10px] text-muted leading-relaxed">Your key is stored locally on this device and never leaves your browser except to call Anthropic's API.</p>
-                    </div>
+                    <p className="text-muted text-lg">Your personal nutrition scientist is ready to analyze your meals. Let's start with your health goals.</p>
                 </div>
             )
         },
