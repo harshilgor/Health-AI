@@ -24,13 +24,54 @@ export default async function handler(req, res) {
     const formData = new FormData();
     formData.append('image', new Blob([buffer], { type: mediaType }), 'image.jpg');
 
-    const segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
+    let currentToken = token;
+    let segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${currentToken}`,
       },
       body: formData,
     });
+
+    // If we used an APICompany token instead of an APIUser token, LogMeal returns a specific error (often 401 with code 802).
+    // Let's dynamically create an APIUser token if that happens.
+    if (!segRes.ok && (segRes.status === 401 || segRes.status === 400)) {
+      const errText = await segRes.text();
+      try {
+        const errJson = JSON.parse(errText);
+        if (errJson.code === 802 || errJson.message?.includes('User not allowed')) {
+          console.log("APICompany token detected. Generating ephemeral APIUser token...");
+          const signUpRes = await fetch(`${LOGMEAL_BASE}/v2/users/signUp`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`
+            },
+            body: JSON.stringify({ username: `nouris_user_${Date.now()}_${Math.floor(Math.random() * 10000)}` })
+          });
+
+          if (signUpRes.ok) {
+            const signUpJson = await signUpRes.json();
+            currentToken = signUpJson.token;
+            console.log("Successfully generated APIUser token.");
+
+            // Retry the original request
+            segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
+              method: 'POST',
+              headers: {
+                Authorization: `Bearer ${currentToken}`,
+              },
+              body: formData,
+            });
+          }
+        } else {
+          // Pass the error down to the next block
+          segRes = { ok: false, status: segRes.status, text: async () => errText };
+        }
+      } catch (e) {
+        segRes = { ok: false, status: segRes.status, text: async () => errText };
+      }
+    }
 
     if (!segRes.ok) {
       const errText = await segRes.text();
@@ -38,7 +79,7 @@ export default async function handler(req, res) {
       try {
         const errJson = JSON.parse(errText);
         if (errJson.message) msg = errJson.message;
-      } catch (_) {}
+      } catch (_) { }
       return res.status(segRes.status >= 500 ? 502 : segRes.status).json({
         error: msg,
         details: errText.slice(0, 200),
@@ -57,7 +98,7 @@ export default async function handler(req, res) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        Authorization: `Bearer ${currentToken}`,
       },
       body: JSON.stringify({ imageId }),
     });
@@ -68,7 +109,7 @@ export default async function handler(req, res) {
       try {
         const errJson = JSON.parse(errText);
         if (errJson.message) msg = errJson.message;
-      } catch (_) {}
+      } catch (_) { }
       return res.status(nutRes.status >= 500 ? 502 : nutRes.status).json({
         error: msg,
         details: errText.slice(0, 200),
