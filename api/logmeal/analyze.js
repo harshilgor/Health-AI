@@ -21,16 +21,21 @@ export default async function handler(req, res) {
     }
 
     const buffer = Buffer.from(base64Image, 'base64');
-    const formData = new FormData();
-    formData.append('image', new Blob([buffer], { type: mediaType }), 'image.jpg');
+    const createFormData = () => {
+      const fd = new FormData();
+      fd.append('image', new Blob([buffer], { type: mediaType }), 'image.jpg');
+      return fd;
+    };
 
-    let currentToken = token;
+    // If we already have a cached APIUser token, use it immediately
+    let currentToken = global._nourisLogMealToken || token;
+
     let segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${currentToken}`,
       },
-      body: formData,
+      body: createFormData(),
     });
 
     // If we used an APICompany token instead of an APIUser token, LogMeal returns a specific error (often 401 with code 802).
@@ -53,15 +58,16 @@ export default async function handler(req, res) {
           if (signUpRes.ok) {
             const signUpJson = await signUpRes.json();
             currentToken = signUpJson.token;
+            global._nourisLogMealToken = currentToken; // Cache it globally
             console.log("Successfully generated APIUser token.");
 
-            // Retry the original request
+            // Retry the original request WITH A NEW form data instance!
             segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
               method: 'POST',
               headers: {
                 Authorization: `Bearer ${currentToken}`,
               },
-              body: formData,
+              body: createFormData(),
             });
           }
         } else {
