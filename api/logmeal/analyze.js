@@ -1,5 +1,9 @@
 import FormData from 'form-data';
 
+// LogMeal API (https://api.logmeal.com) — official paths from docs.logmeal.com:
+// 1. POST /v2/image/segmentation/complete — upload image, get imageId + segmentation_results
+// 2. POST /v2/image/confirm/dish — confirm dish IDs per segment (required before nutrition on some plans)
+// 3. POST /v2/nutrition/recipe/nutritionalInfo — get nutritional info by imageId
 const LOGMEAL_BASE = 'https://api.logmeal.com';
 
 function streamToBuffer(stream) {
@@ -114,6 +118,50 @@ export default async function handler(req, res) {
       return res.status(502).json({
         error: 'LogMeal did not return an imageId',
       });
+    }
+
+    // Confirm dishes (top-1 per segment) so /recipe/nutritionalInfo has confirmed items
+    const segments = segmentation.segmentation_results || [];
+    if (segments.length > 0) {
+      const confirmedClass = [];
+      const source = [];
+      const food_item_position = [];
+      for (const seg of segments) {
+        const pos = seg.food_item_position;
+        const top = seg.recognition_results?.[0];
+        if (pos != null && top?.id != null) {
+          food_item_position.push(pos);
+          confirmedClass.push(top.id);
+          source.push('logmeal');
+        }
+      }
+      if (confirmedClass.length > 0) {
+        const confirmRes = await fetch(`${LOGMEAL_BASE}/v2/image/confirm/dish?language=eng`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${currentToken}`,
+          },
+          body: JSON.stringify({
+            imageId,
+            confirmedClass,
+            source,
+            food_item_position,
+          }),
+        });
+        if (!confirmRes.ok) {
+          const errText = await confirmRes.text();
+          let msg = 'Dish confirmation failed';
+          try {
+            const errJson = JSON.parse(errText);
+            if (errJson.message) msg = errJson.message;
+          } catch (_) {}
+          return res.status(confirmRes.status >= 500 ? 502 : confirmRes.status).json({
+            error: msg,
+            details: errText.slice(0, 200),
+          });
+        }
+      }
     }
 
     const nutRes = await fetch(`${LOGMEAL_BASE}/v2/nutrition/recipe/nutritionalInfo?language=eng`, {
