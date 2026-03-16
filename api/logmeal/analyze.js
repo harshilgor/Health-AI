@@ -1,3 +1,5 @@
+import FormData from 'form-data';
+
 const LOGMEAL_BASE = 'https://api.logmeal.com';
 
 export default async function handler(req, res) {
@@ -10,7 +12,7 @@ export default async function handler(req, res) {
     process.env.VITE_LOGMEAL_TOKEN;
   if (!token) {
     return res.status(500).json({
-      error: 'LogMeal token not configured. Add LOGMEAL_TOKEN or VITE_LOGMEAL_TOKEN to Vercel environment variables.',
+      error: 'LogMeal token not configured. Add LOGMEAL_TOKEN to Vercel environment variables.',
     });
   }
 
@@ -23,19 +25,20 @@ export default async function handler(req, res) {
     const buffer = Buffer.from(base64Image, 'base64');
     const createFormData = () => {
       const fd = new FormData();
-      fd.append('image', new Blob([buffer], { type: mediaType }), 'image.jpg');
+      fd.append('image', buffer, { filename: 'image.jpg', contentType: mediaType });
       return fd;
     };
 
-    // If we already have a cached APIUser token, use it immediately
     let currentToken = global._nourisLogMealToken || token;
+    const form = createFormData();
 
     let segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
       method: 'POST',
       headers: {
+        ...form.getHeaders(),
         Authorization: `Bearer ${currentToken}`,
       },
-      body: createFormData(),
+      body: form,
     });
 
     // If we used an APICompany token instead of an APIUser token, LogMeal returns a specific error (often 401 with code 802).
@@ -61,13 +64,14 @@ export default async function handler(req, res) {
             global._nourisLogMealToken = currentToken; // Cache it globally
             console.log("Successfully generated APIUser token.");
 
-            // Retry the original request WITH A NEW form data instance!
+            const formRetry = createFormData();
             segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
               method: 'POST',
               headers: {
+                ...formRetry.getHeaders(),
                 Authorization: `Bearer ${currentToken}`,
               },
-              body: createFormData(),
+              body: formRetry,
             });
           } else {
             console.error("Failed to generate APIUser token", await signUpRes.text());

@@ -1,7 +1,7 @@
 import React, { useMemo, useCallback } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion } from 'framer-motion';
-import { Camera, Image as ImageIcon, Plus, ArrowRight } from 'lucide-react';
+import { Camera } from 'lucide-react';
 
 const ProgressRing = ({ value, max, label, color = "#FFFFFF", size = 120, thickness = 8 }) => {
     const radius = (size - thickness) / 2;
@@ -81,27 +81,26 @@ export default function Dashboard({ profile, meals = [], onAnalyze }) {
 
     return (
         <div className="space-y-12">
-            <div className="space-y-4">
-                <h1 className="text-5xl">Dashboard</h1>
-                <p className="text-muted text-xl font-sans italic">Your nutritional state for today, {new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}.</p>
+            <div className="space-y-1">
+                <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Today</h1>
+                <p className="text-muted text-sm">{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</p>
             </div>
 
             <div
                 {...getRootProps()}
-                className={`card group cursor-pointer border-dashed border-2 py-20 flex flex-col items-center gap-6 transition-all duration-500 overflow-hidden relative ${isDragActive ? 'border-accent bg-accent/5' : 'border-foreground/10 hover:border-foreground/30'}`}
+                className={`rounded-2xl border-2 border-dashed py-16 md:py-20 flex flex-col items-center gap-5 transition-all duration-300 cursor-pointer ${isDragActive ? 'border-foreground/30 bg-foreground/[0.02]' : 'border-foreground/10 hover:border-foreground/20 bg-card'}`}
             >
-                <div className="absolute inset-0 bg-accent/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-                <div className="relative z-10 w-20 h-20 rounded-full bg-accent/10 flex items-center justify-center text-accent group-hover:scale-110 transition-transform">
-                    <Camera size={32} />
+                <div className="w-14 h-14 rounded-full bg-foreground/[0.06] flex items-center justify-center text-foreground">
+                    <Camera size={26} strokeWidth={1.5} />
                 </div>
-                <div className="relative z-10 text-center space-y-2">
-                    <h2 className="text-2xl">Drop a photo of your meal</h2>
-                    <p className="text-muted font-mono text-xs uppercase tracking-widest">or click to browse files</p>
+                <div className="text-center space-y-1">
+                    <h2 className="text-xl font-medium text-foreground">Add a meal photo</h2>
+                    <p className="text-muted text-sm">Drop an image or tap to upload</p>
                 </div>
                 <input {...getInputProps()} />
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-8 p-10 bg-card/50 rounded-[40px] border border-foreground/5 backdrop-blur-sm">
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 p-8 md:p-10 bg-card rounded-2xl shadow-sm">
                 <ProgressRing
                     value={totals.calories}
                     max={profile.daily_calories || 2500}
@@ -122,40 +121,34 @@ export default function Dashboard({ profile, meals = [], onAnalyze }) {
                 />
             </div>
 
-            <div className="space-y-6">
-                <div className="flex items-center justify-between pb-4 border-b border-foreground/5">
-                    <h3 className="text-xl font-mono uppercase tracking-widest">Recent Analysis</h3>
-                    <button className="text-accent text-sm font-mono uppercase tracking-widest flex items-center gap-2 hover:gap-3 transition-all">
-                        History <ArrowRight size={14} />
-                    </button>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="space-y-4">
+                <h3 className="text-sm font-medium text-muted">Recent meals</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     {recentHistory.length > 0 ? recentHistory.map((m, i) => (
                         <motion.div
                             key={m.id}
-                            initial={{ opacity: 0, y: 10 }}
+                            initial={{ opacity: 0, y: 8 }}
                             animate={{ opacity: 1, y: 0 }}
-                            transition={{ delay: i * 0.1 }}
-                            className="card !p-0 overflow-hidden group hover:border-accent/40"
+                            transition={{ delay: i * 0.05 }}
+                            className="bg-card rounded-xl overflow-hidden shadow-sm"
                         >
-                            <div className="h-40 bg-muted/20 relative">
-                                {m.image && <img src={m.image} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" alt={m.name} />}
-                                <div className="absolute top-4 right-4 bg-background/80 backdrop-blur-md px-3 py-1 rounded-full text-xs font-mono border border-foreground/5">
+                            <div className="h-32 bg-card-muted relative">
+                                {m.image && <img src={m.image} className="w-full h-full object-cover" alt="" />}
+                                <div className="absolute top-3 right-3 bg-background/90 px-2 py-0.5 rounded-md text-xs font-medium">
                                     {m.health_score}/10
                                 </div>
                             </div>
-                            <div className="p-4 space-y-2">
-                                <h4 className="text-lg leading-tight truncate">{m.meal_name}</h4>
-                                <div className="flex items-center justify-between text-[10px] font-mono text-muted uppercase tracking-widest">
-                                    <span>{m.nutrition.calories} kcal</span>
+                            <div className="p-3 space-y-0.5">
+                                <h4 className="text-sm font-medium truncate">{m.meal_name}</h4>
+                                <div className="flex justify-between text-xs text-muted">
+                                    <span>{m.nutrition?.calories ?? 0} kcal</span>
                                     <span>{new Date(m.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
                                 </div>
                             </div>
                         </motion.div>
                     )) : (
-                        <div className="col-span-3 py-12 text-center text-muted font-sans italic text-lg">
-                            No meals analyzed yet. Capture your first meal to start tracking.
+                        <div className="col-span-3 py-10 text-center text-muted text-sm">
+                            No meals yet. Add a photo above to start.
                         </div>
                     )}
                 </div>

@@ -6,41 +6,35 @@
 
 @layer base {
   :root {
-    --background: #F5F5F7;
-    --foreground: #000000;
-    --accent: #000000;
+    --background: #FAFAFA;
+    --foreground: #0A0A0A;
+    --accent: #0A0A0A;
   }
 
   body {
-    @apply bg-background text-foreground font-sans selection:bg-accent selection:text-white;
+    @apply bg-background text-foreground font-sans selection:bg-foreground selection:text-white antialiased;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
   }
 
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
-    @apply font-sans tracking-tight;
+  h1, h2, h3, h4, h5, h6 {
+    @apply font-sans tracking-tight font-medium;
   }
 }
 
 @layer components {
   .card {
-    @apply bg-card border border-foreground/10 rounded-2xl p-6 backdrop-blur-sm transition-all;
+    @apply bg-card rounded-2xl p-6 shadow-sm transition-all;
   }
 
   .btn-primary {
-    @apply bg-accent text-white px-6 py-3 rounded-xl font-sans font-medium hover:bg-black/80 transition-all active:scale-95 disabled:opacity-50;
+    @apply bg-foreground text-background px-6 py-3 rounded-xl font-sans font-medium hover:opacity-90 transition-opacity active:scale-[0.98] disabled:opacity-50;
   }
 
   .btn-secondary {
-    @apply border border-foreground/20 hover:border-foreground/40 px-6 py-3 rounded-xl font-sans font-medium transition-all active:scale-95 disabled:opacity-50;
+    @apply bg-transparent border border-foreground/15 hover:border-foreground/30 px-6 py-3 rounded-xl font-sans font-medium transition-colors active:scale-[0.98] disabled:opacity-50;
   }
 
-  /* Progress ring styles */
   .progress-ring {
     @apply relative flex items-center justify-center;
   }

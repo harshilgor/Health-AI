@@ -188,7 +188,8 @@ export async function analyzeMealWithLogMeal(base64Image, mediaType = 'image/jpe
 
   if (!res.ok) {
     const err = await res.json().catch(() => ({}));
-    throw new Error(err.message || err.error || 'Analysis failed');
+    const message = err?.error || err?.message || (err?.details ? `Details: ${err.details}` : null) || `Analysis failed (${res.status})`;
+    throw new Error(message);
   }
 
   const data = await res.json();

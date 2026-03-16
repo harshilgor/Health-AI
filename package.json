@@ -9,14 +9,15 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "clsx": "^2.1.1",
+    "form-data": "^4.0.5",
+    "framer-motion": "^11.11.0",
+    "lucide-react": "^0.460.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
-    "lucide-react": "^0.460.0",
-    "framer-motion": "^11.11.0",
-    "clsx": "^2.1.1",
-    "tailwind-merge": "^2.5.4",
+    "react-dropzone": "^14.3.5",
     "recharts": "^2.13.3",
-    "react-dropzone": "^14.3.5"
+    "tailwind-merge": "^2.5.4"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.3",

@@ -7,21 +7,25 @@ export default {
     theme: {
         extend: {
             colors: {
-                background: "#F5F5F7",
-                foreground: "#000000",
-                accent: "#000000",
+                background: "#FAFAFA",
+                foreground: "#0A0A0A",
+                accent: "#0A0A0A",
                 card: "#FFFFFF",
-                "card-muted": "#EFEFF4",
-                muted: "#86868B",
+                "card-muted": "#F5F5F5",
+                muted: "#737373",
             },
             fontFamily: {
                 serif: ['"EB Garamond"', 'serif'],
                 mono: ['"JetBrains Mono"', 'monospace'],
-                sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', '"San Francisco"', '"SF Pro Text"', '"Helvetica Neue"', 'sans-serif'],
+                sans: ['"Inter"', '-apple-system', 'BlinkMacSystemFont', 'sans-serif'],
             },
             animation: {
                 'pulse-slow': 'pulse 4s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-            }
+            },
+            borderRadius: {
+                '2xl': '1rem',
+                '3xl': '1.25rem',
+            },
         },
     },
     plugins: [],
