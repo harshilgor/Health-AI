@@ -2,17 +2,33 @@ import FormData from 'form-data';
 
 const LOGMEAL_BASE = 'https://api.logmeal.com';
 
+function streamToBuffer(stream) {
+  return new Promise((resolve, reject) => {
+    const chunks = [];
+    stream.on('data', (chunk) => chunks.push(chunk));
+    stream.on('end', () => resolve(Buffer.concat(chunks)));
+    stream.on('error', reject);
+  });
+}
+
+async function buildMultipartBody(base64Image, mediaType) {
+  const buf = Buffer.from(base64Image, 'base64');
+  const form = new FormData();
+  form.append('image', buf, { filename: 'image.jpg', contentType: mediaType });
+  const headers = form.getHeaders();
+  const body = await streamToBuffer(form);
+  return { headers, body };
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
 
-  const token =
-    process.env.LOGMEAL_TOKEN ||
-    process.env.VITE_LOGMEAL_TOKEN;
+  const token = process.env.LOGMEAL_TOKEN;
   if (!token) {
     return res.status(500).json({
-      error: 'LogMeal token not configured. Add LOGMEAL_TOKEN to Vercel environment variables.',
+      error: 'Add LOGMEAL_TOKEN in Vercel → Settings → Environment Variables.',
     });
   }
 
@@ -22,23 +38,16 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing image in request body' });
     }
 
-    const buffer = Buffer.from(base64Image, 'base64');
-    const createFormData = () => {
-      const fd = new FormData();
-      fd.append('image', buffer, { filename: 'image.jpg', contentType: mediaType });
-      return fd;
-    };
-
+    const { headers: formHeaders, body: formBody } = await buildMultipartBody(base64Image, mediaType);
     let currentToken = global._nourisLogMealToken || token;
-    const form = createFormData();
 
     let segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
       method: 'POST',
       headers: {
-        ...form.getHeaders(),
+        ...formHeaders,
         Authorization: `Bearer ${currentToken}`,
       },
-      body: form,
+      body: formBody,
     });
 
     // If we used an APICompany token instead of an APIUser token, LogMeal returns a specific error (often 401 with code 802).
@@ -64,14 +73,14 @@ export default async function handler(req, res) {
             global._nourisLogMealToken = currentToken; // Cache it globally
             console.log("Successfully generated APIUser token.");
 
-            const formRetry = createFormData();
+            const retry = await buildMultipartBody(base64Image, mediaType);
             segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
               method: 'POST',
               headers: {
-                ...formRetry.getHeaders(),
+                ...retry.headers,
                 Authorization: `Bearer ${currentToken}`,
               },
-              body: formRetry,
+              body: retry.body,
             });
           } else {
             console.error("Failed to generate APIUser token", await signUpRes.text());
