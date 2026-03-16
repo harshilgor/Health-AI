@@ -69,6 +69,9 @@ export default async function handler(req, res) {
               },
               body: createFormData(),
             });
+          } else {
+            console.error("Failed to generate APIUser token", await signUpRes.text());
+            segRes = { ok: false, status: segRes.status, text: async () => errText };
           }
         } else {
           // Pass the error down to the next block

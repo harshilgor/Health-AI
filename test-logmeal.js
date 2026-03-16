@@ -5,38 +5,90 @@ async function run() {
 
     const base64Image = "/9j/4AAQSkZJRgABAQEASABIAAD/2wBDAAYEBAQFBAYFBQYJBgUGCQsIBgYICwwKCgsKCgwQDAwMDAwMEAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAwMDAz/2wBDAQcHBw0MDRgQEBgYDxAOGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBgYGBj/wAARCgABAAEDASIAAhEBAxEB/8QAFQABAQAAAAAAAAAAAAAAAAAAAAf/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/8QAFQEBAQAAAAAAAAAAAAAAAAAABQf/xAAUAQEAAAAAAAAAAAAAAAAAAAAA/9oADAMBAAIRAxEAPwBlzP/Z";
 
+    // Mimic the backend function
     const buffer = Buffer.from(base64Image, 'base64');
-    const formData = new FormData();
-    formData.append('image', new Blob([buffer], { type: 'image/jpeg' }), 'image.jpg');
+    const mediaType = 'image/jpeg';
+    const createFormData = () => {
+        const fd = new FormData();
+        fd.append('image', new Blob([buffer], { type: mediaType }), 'image.jpg');
+        return fd;
+    };
+
+    let currentToken = global._nourisLogMealToken || token;
 
     try {
         let segRes = await fetch(`https://api.logmeal.com/v2/image/segmentation/complete?language=eng`, {
             method: 'POST',
             headers: {
-                Authorization: `Bearer ${token}`
+                Authorization: `Bearer ${currentToken}`,
             },
-            body: formData
+            body: createFormData(),
         });
-        console.log("Status 1:", segRes.status);
-        console.log("Response 1:", await segRes.text());
 
-        console.log("Retrying with SAME formData...");
-        const signUpRes = await fetch(`https://api.logmeal.com/v2/users/signUp`, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${token}` },
-            body: JSON.stringify({ username: `test_formdata_${Date.now()}` })
-        });
-        const newToken = await (await signUpRes).json();
+        if (!segRes.ok && (segRes.status === 401 || segRes.status === 400)) {
+            const errText = await segRes.text();
+            try {
+                const errJson = JSON.parse(errText);
+                if (errJson.code === 802 || errJson.message?.includes('User not allowed')) {
+                    console.log("APICompany token detected. Generating ephemeral APIUser token...");
+                    const signUpRes = await fetch(`https://api.logmeal.com/v2/users/signUp`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            Authorization: `Bearer ${token}`
+                        },
+                        body: JSON.stringify({ username: `nouris_user_${Date.now()}_${Math.floor(Math.random() * 10000)}` })
+                    });
 
-        const segRes2 = await fetch(`https://api.logmeal.com/v2/image/segmentation/complete?language=eng`, {
+                    if (signUpRes.ok) {
+                        const signUpJson = await signUpRes.json();
+                        currentToken = signUpJson.token;
+                        global._nourisLogMealToken = currentToken; // Cache it globally
+                        console.log("Successfully generated APIUser token.");
+
+                        // Retry the original request WITH A NEW form data instance!
+                        segRes = await fetch(`https://api.logmeal.com/v2/image/segmentation/complete?language=eng`, {
+                            method: 'POST',
+                            headers: {
+                                Authorization: `Bearer ${currentToken}`,
+                            },
+                            body: createFormData(),
+                        });
+                    }
+                } else {
+                    segRes = { ok: false, status: segRes.status, text: async () => errText };
+                }
+            } catch (e) {
+                segRes = { ok: false, status: segRes.status, text: async () => errText };
+            }
+        }
+
+        if (!segRes.ok) {
+            console.log("Segmentation failed:", await segRes.text());
+            return;
+        }
+
+        const segmentation = await segRes.json();
+        console.log("Segmentation Success:", segmentation);
+
+        const imageId = segmentation.imageId;
+        console.log("ImageId:", imageId);
+
+        const nutRes = await fetch(`https://api.logmeal.com/v2/nutrition/recipe/nutritionalInfo?language=eng`, {
             method: 'POST',
             headers: {
-                Authorization: `Bearer ${newToken.token}`
+                'Content-Type': 'application/json',
+                Authorization: `Bearer ${currentToken}`,
             },
-            body: formData
+            body: JSON.stringify({ imageId }),
         });
-        console.log("Status 2:", segRes2.status);
-        console.log("Response 2:", await segRes2.text());
+
+        if (!nutRes.ok) {
+            console.log("Nutrition failed:", await nutRes.text());
+            return;
+        }
+
+        console.log("Nutrition Success:", await nutRes.json());
     } catch (e) {
         console.error("Error:", e);
     }

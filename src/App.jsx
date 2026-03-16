@@ -89,6 +89,7 @@ export default function App() {
     const handleAnalyze = async (base64, mediaType = "image/jpeg") => {
         setIsAnalyzing(true);
         setError(null);
+        setAnalysisResult(null);
         setAnalysisImage(base64);
         try {
             const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
@@ -97,6 +98,8 @@ export default function App() {
         } catch (err) {
             console.error(err);
             setError("Something went wrong with this analysis. This sometimes happens with unclear photos or unusual dishes. Try again with a clearer image.");
+            setAnalysisResult(null);
+            setAnalysisImage(null);
         } finally {
             setIsAnalyzing(false);
         }
