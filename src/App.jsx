@@ -5,7 +5,7 @@ import Dashboard from './views/Dashboard';
 import AnalysisView from './views/AnalysisView';
 import WeeklyReport from './views/WeeklyReport';
 import SymptomLog from './views/SymptomLog';
-import { analyzeMealWithLogMeal } from './lib/logmeal';
+import { analyzeMealWithGemini } from './lib/geminiClient';
 import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -89,12 +89,11 @@ export default function App() {
         setAnalysisResult(null);
         setAnalysisImage(base64);
         try {
-            const cleanBase64 = base64.includes(',') ? base64.split(',')[1] : base64;
-            const result = await analyzeMealWithLogMeal(cleanBase64, mediaType);
+            const result = await analyzeMealWithGemini(base64, mediaType);
             setAnalysisResult(result);
         } catch (err) {
             console.error(err);
-            setError("Something went wrong with this analysis. This sometimes happens with unclear photos or unusual dishes. Try again with a clearer image.");
+            setError(err?.message || "Something went wrong with this analysis. This sometimes happens with unclear photos or unusual dishes. Try again with a clearer image.");
             setAnalysisResult(null);
             setAnalysisImage(null);
         } finally {
