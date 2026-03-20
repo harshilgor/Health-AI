@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { X, ChevronRight, Camera } from 'lucide-react';
+import { X, Camera, RefreshCw } from 'lucide-react';
+import GardenCanvas from '../components/garden/GardenCanvas';
 import { ORGAN_META } from '../components/garden/OrganPlants';
 
 const ORGAN_TIPS = {
@@ -31,33 +32,10 @@ const ORGAN_TIPS = {
 };
 
 function statusLabel(pct) {
-  if (pct >= 78) return { text: 'Healthy', className: 'text-emerald-600' };
-  if (pct >= 55) return { text: 'Good', className: 'text-amber-600' };
+  if (pct >= 78) return { text: 'Thriving', className: 'text-emerald-600' };
+  if (pct >= 55) return { text: 'Growing', className: 'text-amber-600' };
   if (pct >= 35) return { text: 'Needs care', className: 'text-orange-600' };
   return { text: 'Struggling', className: 'text-rose-600' };
-}
-
-function SkyBanner({ environment }) {
-  const map = {
-    clear: { emoji: '☀️', bg: 'from-sky-200/80 to-amber-100/60', text: 'Clear sky' },
-    partly: { emoji: '⛅', bg: 'from-slate-200/70 to-sky-100/50', text: 'Partly cloudy' },
-    foggy: { emoji: '🌫️', bg: 'from-slate-300/60 to-slate-200/40', text: 'Inflammation fog' },
-    rainy: { emoji: '🌧️', bg: 'from-slate-400/50 to-blue-200/40', text: 'Stormy patch' },
-  };
-  const m = map[environment] || map.partly;
-  return (
-    <div
-      className={`rounded-2xl bg-gradient-to-br ${m.bg} border border-foreground/10 px-4 py-3 flex items-center justify-between`}
-    >
-      <div className="flex items-center gap-2 text-sm font-medium text-neutral-800">
-        <span className="text-xl" aria-hidden>
-          {m.emoji}
-        </span>
-        {m.text}
-      </div>
-      <span className="text-xs text-neutral-600 hidden sm:inline">Based on recent meal patterns</span>
-    </div>
-  );
 }
 
 function OrganDetailSheet({ organKey, garden, onClose, onScan }) {
@@ -116,7 +94,10 @@ function OrganDetailSheet({ organKey, garden, onClose, onScan }) {
                 <h3 className="text-xs font-mono uppercase tracking-widest text-muted mb-2">Focus areas</h3>
                 <ul className="text-sm space-y-2 text-foreground/90">
                   {tips.focus.map((t) => (
-                    <li key={t}>✅ {t}</li>
+                    <li key={t} className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-emerald-500/15 flex items-center justify-center text-emerald-600 text-[10px]">✓</span>
+                      {t}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -124,7 +105,10 @@ function OrganDetailSheet({ organKey, garden, onClose, onScan }) {
                 <h3 className="text-xs font-mono uppercase tracking-widest text-muted mb-2">Watch outs</h3>
                 <ul className="text-sm space-y-2 text-foreground/80">
                   {tips.avoid.map((t) => (
-                    <li key={t}>⚠️ {t}</li>
+                    <li key={t} className="flex items-start gap-2">
+                      <span className="shrink-0 mt-0.5 w-4 h-4 rounded-full bg-amber-500/15 flex items-center justify-center text-amber-600 text-[10px]">!</span>
+                      {t}
+                    </li>
                   ))}
                 </ul>
               </div>
@@ -137,7 +121,7 @@ function OrganDetailSheet({ organKey, garden, onClose, onScan }) {
             </p>
           )}
           <button type="button" onClick={onScan} className="btn-primary w-full flex items-center justify-center gap-2">
-            <Camera size={18} /> Scan a meal
+            <Camera size={18} /> Scan a meal to grow this plant
           </button>
         </div>
       </motion.div>
@@ -157,20 +141,20 @@ export default function HealthGarden({
   const g = garden || {};
   const chrono = Number(g.chronological_age ?? profile?.age ?? 30);
   const bio = g.biological_age != null ? Number(g.biological_age) : chrono;
-
-  const organs = ['heart', 'brain', 'gut', 'muscle', 'immune', 'bones'];
+  const streak = g.current_streak ?? 0;
 
   if (loading) {
     return (
       <div className="flex flex-col items-center justify-center min-h-[50vh] gap-4">
         <div className="w-10 h-10 border-2 border-foreground/20 border-t-foreground rounded-full animate-spin" />
-        <p className="text-sm text-muted">Growing your garden…</p>
+        <p className="text-sm text-muted">Growing your garden...</p>
       </div>
     );
   }
 
   return (
-    <div className="max-w-2xl mx-auto space-y-6 pb-24 md:pb-8">
+    <div className="max-w-2xl mx-auto space-y-5 pb-24 md:pb-8">
+      {/* Header */}
       <div className="flex items-start justify-between gap-4">
         <div>
           <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted">Your health garden</p>
@@ -179,67 +163,67 @@ export default function HealthGarden({
             Each plant mirrors a body system. Log meals to water them — this is motivational, not medical advice.
           </p>
         </div>
-        <button type="button" onClick={onRefresh} className="text-xs text-muted hover:text-foreground underline shrink-0">
-          Refresh
+        <button type="button" onClick={onRefresh}
+          className="p-2 rounded-lg text-muted hover:text-foreground hover:bg-foreground/5 transition-colors shrink-0"
+          aria-label="Refresh garden"
+        >
+          <RefreshCw size={16} />
         </button>
       </div>
 
+      {/* Stats bar */}
       <div className="flex flex-wrap gap-3 text-sm">
-        <span className="rounded-full border border-foreground/10 px-3 py-1 bg-card">
-          🔥 Streak: <strong>{g.current_streak ?? 0}</strong> days
+        <span className="rounded-full border border-foreground/10 px-3 py-1.5 bg-card flex items-center gap-1.5">
+          <span className="text-base leading-none">🔥</span>
+          Streak: <strong>{streak}</strong> {streak === 1 ? 'day' : 'days'}
         </span>
-        <span className="rounded-full border border-foreground/10 px-3 py-1 bg-card">
-          Bio age (model): <strong>{bio.toFixed(1)}</strong>y
+        <span className="rounded-full border border-foreground/10 px-3 py-1.5 bg-card">
+          Bio age: <strong>{bio.toFixed(1)}</strong>y
         </span>
-        <span className="rounded-full border border-foreground/10 px-3 py-1 bg-card text-muted">
-          Chrono: {chrono}y
-        </span>
+        {bio < chrono && (
+          <span className="rounded-full border border-emerald-200 px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-medium">
+            {(chrono - bio).toFixed(1)}y younger
+          </span>
+        )}
       </div>
 
-      <SkyBanner environment={environment} />
+      {/* Interactive Garden Scene */}
+      <GardenCanvas
+        garden={g}
+        environment={environment}
+        onOrganPress={(organ) => setSelected(organ)}
+      />
 
-      <div className="grid grid-cols-2 gap-4">
-        {organs.map((key) => {
-          const meta = ORGAN_META[key];
-          const Graphic = meta.Graphic;
+      {/* Organ health summary bar */}
+      <div className="grid grid-cols-6 gap-1.5">
+        {['heart', 'brain', 'gut', 'muscle', 'immune', 'bones'].map((key) => {
           const locked = key === 'bones' && !g.bones_unlocked;
-          const pct = locked ? null : Math.round(Number(g[key] ?? 50));
+          const pct = locked ? 0 : Math.round(Number(g[key] ?? 50));
           const st = locked ? null : statusLabel(pct);
-
           return (
-            <motion.button
+            <button
               key={key}
               type="button"
-              whileTap={{ scale: 0.98 }}
               onClick={() => setSelected(key)}
-              className="rounded-2xl border border-foreground/10 bg-card p-4 text-left hover:border-foreground/20 transition-colors shadow-sm"
+              className="rounded-xl border border-foreground/10 bg-card p-2 text-center hover:border-foreground/20 transition-colors"
             >
-              <div className="h-32 flex items-center justify-center -my-1">
-                <Graphic health={locked ? 25 : pct} locked={locked} className="w-full max-w-[130px] h-32" />
-              </div>
-              <div className="mt-2 flex items-center justify-between gap-2">
-                <span className="text-sm font-semibold">{meta.label}</span>
-                <ChevronRight size={16} className="text-muted shrink-0" />
-              </div>
-              <div className="text-xs text-muted mt-0.5">{meta.subtitle}</div>
-              <div className="mt-2 text-sm">
-                {locked ? (
-                  <span className="text-muted">🔒 Log 30 days to unlock</span>
-                ) : (
-                  <span className={st.className}>
-                    {pct}% · {st.text}
-                  </span>
-                )}
-              </div>
-            </motion.button>
+              <div className="text-[10px] font-medium capitalize text-muted">{key}</div>
+              {locked ? (
+                <div className="text-[10px] text-muted mt-0.5">🔒</div>
+              ) : (
+                <div className={`text-xs font-semibold mt-0.5 ${st.className}`}>{pct}%</div>
+              )}
+            </button>
           );
         })}
       </div>
 
+      {/* Scan button */}
       <button type="button" onClick={onScan} className="btn-primary w-full h-14 text-base flex items-center justify-center gap-2">
         <Camera size={22} /> Scan meal
       </button>
 
+      {/* Detail sheet */}
       <AnimatePresence>
         {selected && (
           <OrganDetailSheet
