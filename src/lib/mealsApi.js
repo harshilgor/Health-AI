@@ -22,7 +22,8 @@ export async function createMeal({
   location = '',
 }) {
   const normalized = ensureDataUrl(base64Image, mediaType);
-  const compressedDataUrl = await compressImageDataUrl(normalized, 1280, 0.72);
+  // More aggressive compression for Vercel JSON body limits.
+  const compressedDataUrl = await compressImageDataUrl(normalized, 960, 0.65);
   const payloadMediaType = 'image/jpeg';
 
   const res = await fetch(`${apiBase()}/api/meals`, {
@@ -48,7 +49,8 @@ export async function createMeal({
     if (res.status === 413) {
       throw new Error('Image is too large to upload. Try a closer crop or lower-resolution photo.');
     }
-    throw new Error(data.error || data.message || `Meal save failed (${res.status})`);
+    const details = data.details ? ` (${String(data.details).slice(0, 220)})` : '';
+    throw new Error(data.error || data.message || `Meal save failed (${res.status})${details}`);
   }
   return data;
 }

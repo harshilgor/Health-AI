@@ -37,7 +37,8 @@ export async function analyzeMealWithGemini(base64Image, mediaType = 'image/jpeg
   const normalized = ensureDataUrl(base64Image, mediaType);
   // Vercel serverless body limits can trigger 413 for raw phone photos.
   // Resize + compress before upload to keep request size manageable.
-  const compressedDataUrl = await compressImageDataUrl(normalized, 1280, 0.72);
+  // Use more aggressive compression to reduce request size further.
+  const compressedDataUrl = await compressImageDataUrl(normalized, 960, 0.65);
   const payloadMediaType = 'image/jpeg';
 
   const res = await fetch(`${apiBase}/api/gemini/analyze`, {

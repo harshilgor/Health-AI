@@ -110,7 +110,11 @@ export default async function handler(req, res) {
 
       if (upErr) {
         console.error('Storage upload error:', upErr);
-        return jsonError(res, 500, 'Failed to upload image', { details: upErr.message });
+        return jsonError(res, 500, 'Failed to upload image', {
+          details: upErr.message || String(upErr),
+          bucket: MEAL_IMAGES_BUCKET,
+          path: imagePath,
+        });
       }
 
       const { data: pub } = supabase.storage.from(MEAL_IMAGES_BUCKET).getPublicUrl(imagePath);
@@ -157,7 +161,9 @@ export default async function handler(req, res) {
       if (insErr) {
         console.error('DB insert error:', insErr);
         await supabase.storage.from(MEAL_IMAGES_BUCKET).remove([imagePath]).catch(() => {});
-        return jsonError(res, 500, 'Failed to save meal', { details: insErr.message });
+        return jsonError(res, 500, 'Failed to save meal', {
+          details: insErr.message || String(insErr),
+        });
       }
 
       return res.status(201).json({
