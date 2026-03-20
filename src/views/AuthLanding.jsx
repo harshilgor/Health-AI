@@ -1,4 +1,5 @@
 import React from 'react';
+import { getAuthRedirectUrl } from '../lib/authRedirect';
 
 export default function AuthLanding({ supabase, supabaseConfigured }) {
   const canAuth = !!supabase && supabaseConfigured;
@@ -24,7 +25,7 @@ export default function AuthLanding({ supabase, supabaseConfigured }) {
               canAuth
                 ? supabase.auth.signInWithOAuth({
                     provider: 'google',
-                    options: { redirectTo: window.location.origin },
+                    options: { redirectTo: getAuthRedirectUrl() },
                   })
                 : null
             }
@@ -40,7 +41,7 @@ export default function AuthLanding({ supabase, supabaseConfigured }) {
                 ? supabase.auth.signInWithOAuth({
                     provider: 'google',
                     options: {
-                      redirectTo: window.location.origin,
+                      redirectTo: getAuthRedirectUrl(),
                       // Hint to Google to let the user pick an account.
                       queryParams: { prompt: 'select_account' },
                     },

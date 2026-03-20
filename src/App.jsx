@@ -12,6 +12,7 @@ import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import AuthLanding from './views/AuthLanding';
+import { getAuthRedirectUrl } from './lib/authRedirect';
 import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -103,7 +104,7 @@ export default function App() {
         return supabase.auth.signInWithOAuth({
             provider: 'google',
             options: {
-                redirectTo: window.location.origin,
+                redirectTo: getAuthRedirectUrl(),
                 queryParams: { prompt: 'select_account' },
             },
         });
