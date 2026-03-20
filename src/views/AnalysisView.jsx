@@ -86,7 +86,24 @@ const BulletCard = ({ title, icon, bullets = [], defaultExpanded = true }) => (
     </CollapsibleSection>
 );
 
-export default function AnalysisView({ data, image, onSave, onCancel, alreadySavedToJournal = false }) {
+const ORGAN_LABELS = {
+    heart: 'Heart',
+    brain: 'Brain',
+    gut: 'Gut',
+    muscle: 'Muscle',
+    immune: 'Immune',
+    bones: 'Bones',
+};
+
+export default function AnalysisView({
+    data,
+    image,
+    onSave,
+    onCancel,
+    alreadySavedToJournal = false,
+    gardenUpdate = null,
+    onViewGarden,
+}) {
     const [isLogged, setIsLogged] = useState(false);
 
     const handleSave = () => {
@@ -126,6 +143,54 @@ export default function AnalysisView({ data, image, onSave, onCancel, alreadySav
                     <Info size={16} className="shrink-0" />
                     I'm not fully confident about what's in this photo — these insights are estimates. Try a clearer photo or closer angle for more accurate analysis.
                 </div>
+            )}
+
+            {gardenUpdate?.organImpacts && (
+                <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="rounded-2xl border border-emerald-500/30 bg-emerald-500/5 p-5 space-y-4"
+                >
+                    <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
+                        <span className="text-lg" aria-hidden>
+                            🌱
+                        </span>
+                        Garden updated
+                    </div>
+                    <p className="text-xs text-muted">
+                        Your health garden absorbed this meal. Biological age (model){' '}
+                        {gardenUpdate.bioAgeDelta < 0 ? (
+                            <span className="text-emerald-600 font-medium">
+                                {gardenUpdate.bioAgeDelta.toFixed(3)} yrs (younger)
+                            </span>
+                        ) : gardenUpdate.bioAgeDelta > 0 ? (
+                            <span className="text-amber-700 font-medium">
+                                +{gardenUpdate.bioAgeDelta.toFixed(3)} yrs
+                            </span>
+                        ) : (
+                            <span className="font-medium">unchanged</span>
+                        )}
+                        .
+                    </p>
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
+                        {Object.entries(gardenUpdate.organImpacts).map(([k, v]) => (
+                            <div
+                                key={k}
+                                className="rounded-xl bg-card border border-foreground/10 px-3 py-2 flex justify-between gap-2"
+                            >
+                                <span className="text-muted">{ORGAN_LABELS[k] || k}</span>
+                                <span className={v > 0 ? 'text-emerald-600 font-medium' : v < 0 ? 'text-rose-600 font-medium' : ''}>
+                                    {v > 0 ? `+${v}` : v}
+                                </span>
+                            </div>
+                        ))}
+                    </div>
+                    {onViewGarden && (
+                        <button type="button" onClick={onViewGarden} className="btn-secondary w-full sm:w-auto text-sm">
+                            View garden
+                        </button>
+                    )}
+                </motion.div>
             )}
 
             {/* Top Header */}

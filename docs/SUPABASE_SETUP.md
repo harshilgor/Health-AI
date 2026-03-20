@@ -17,7 +17,11 @@
 
 ## 3. Run migration
 
-In Supabase → **SQL Editor**, paste and run `supabase/migrations/001_meals.sql`.
+In Supabase → **SQL Editor**, run migrations in order:
+
+- `supabase/migrations/001_meals.sql`
+- `supabase/migrations/002_auth_tables.sql` (if using Google auth + profiles)
+- `supabase/migrations/003_user_garden.sql` — **Health Garden** scores + biological age model
 
 ## 4. Storage bucket
 

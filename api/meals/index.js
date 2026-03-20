@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import { analyzeFoodImage } from '../lib/geminiFoodAnalysis.js';
 import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../lib/supabaseServer.js';
 import { getAuthedUserId } from '../lib/authUser.js';
+import { scoreMealForGarden } from '../lib/gardenScoring.js';
+import { applyScoringToGarden } from '../lib/gardenState.js';
 
 const ALLOWED_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
 
@@ -146,9 +148,11 @@ export default async function handler(req, res) {
         throw gemErr;
       }
 
+      const gardenScoring = scoreMealForGarden({ nouris, detailed });
       const analysisResult = {
         gemini: detailed,
         ui: nouris,
+        garden: gardenScoring,
       };
 
       const { data: row, error: insErr } = await supabase
@@ -175,6 +179,14 @@ export default async function handler(req, res) {
         });
       }
 
+      let gardenUpdate = null;
+      try {
+        const applied = await applyScoringToGarden(supabase, userId, gardenScoring);
+        if (applied) gardenUpdate = applied.update;
+      } catch (ge) {
+        console.warn('Garden update skipped:', ge?.message || ge);
+      }
+
       return res.status(201).json({
         meal_id: row.meal_id,
         user_id: row.user_id,
@@ -185,6 +197,7 @@ export default async function handler(req, res) {
         recorded_at: row.recorded_at,
         analysis: nouris,
         analysis_result: row.analysis_result,
+        garden_update: gardenUpdate,
       });
     } catch (err) {
       console.error('POST /api/meals error:', err);

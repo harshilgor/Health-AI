@@ -23,6 +23,9 @@
     },
     "api/symptoms/index.js": {
       "maxDuration": 30
+    },
+    "api/garden/index.js": {
+      "maxDuration": 30
     }
   }
 }

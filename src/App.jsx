@@ -1,19 +1,22 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import Onboarding from './views/Onboarding';
 import Dashboard from './views/Dashboard';
 import AnalysisView from './views/AnalysisView';
 import WeeklyReport from './views/WeeklyReport';
 import SymptomLog from './views/SymptomLog';
+import HealthGarden from './views/HealthGarden';
+import GardenInsights from './views/GardenInsights';
 import { analyzeMealWithGemini } from './lib/geminiClient';
 import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
+import { fetchGarden } from './lib/gardenApi';
 import { getOrCreateUserId } from './lib/userId';
 import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import MarketingLanding from './views/MarketingLanding';
 import { getAuthRedirectUrl } from './lib/authRedirect';
-import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User } from 'lucide-react';
+import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User, Sprout, BarChart3 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PulseBackground = () => (
@@ -90,7 +93,11 @@ export default function App() {
     const [session, setSession] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
     const [userDataLoading, setUserDataLoading] = useState(false);
-    const [activeTab, setActiveTab] = useState('analyze');
+    const [activeTab, setActiveTab] = useState('garden');
+    const [garden, setGarden] = useState(null);
+    const [gardenEnvironment, setGardenEnvironment] = useState('partly');
+    const [gardenLoading, setGardenLoading] = useState(false);
+    const [lastGardenUpdate, setLastGardenUpdate] = useState(null);
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analysisImage, setAnalysisImage] = useState(null);
     const [analysisMeta, setAnalysisMeta] = useState(null);
@@ -215,6 +222,8 @@ export default function App() {
                 setAnalysisResult(created.analysis);
                 setAnalysisImage(created.image_url || base64);
                 setAnalysisMeta({ fromApi: true, mealId: created.meal_id });
+                setLastGardenUpdate(created.garden_update || null);
+                loadGarden();
             } catch (e) {
                 if (
                     e.code === 'STORAGE_NOT_CONFIGURED' ||
@@ -226,6 +235,7 @@ export default function App() {
                     setAnalysisResult(result);
                     setAnalysisImage(base64);
                     setAnalysisMeta(null);
+                    setLastGardenUpdate(null);
                 } else {
                     throw e;
                 }
@@ -239,6 +249,7 @@ export default function App() {
             setAnalysisResult(null);
             setAnalysisImage(null);
             setAnalysisMeta(null);
+            setLastGardenUpdate(null);
         } finally {
             setIsAnalyzing(false);
         }
@@ -249,13 +260,15 @@ export default function App() {
             setAnalysisResult(null);
             setAnalysisImage(null);
             setAnalysisMeta(null);
-            setActiveTab('analyze');
+            setLastGardenUpdate(null);
+            setActiveTab('garden');
             return;
         }
         setMeals([mealData, ...meals]);
         setAnalysisResult(null);
         setAnalysisImage(null);
         setAnalysisMeta(null);
+        setLastGardenUpdate(null);
         setActiveTab('analyze');
     };
 
@@ -349,6 +362,30 @@ export default function App() {
         load();
     }, [session, envApiKey]);
 
+    const loadGarden = useCallback(async () => {
+        const token = session?.access_token;
+        if (!token) return;
+        setGardenLoading(true);
+        try {
+            const data = await fetchGarden(token);
+            setGarden(data.garden);
+            setGardenEnvironment(data.environment || 'partly');
+        } catch (e) {
+            console.warn('Garden load:', e);
+        } finally {
+            setGardenLoading(false);
+        }
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        if (!session?.access_token) {
+            setGarden(null);
+            setGardenLoading(false);
+            return;
+        }
+        loadGarden();
+    }, [session?.access_token, loadGarden]);
+
     // If we loaded a profile from Supabase but don't have an API key locally,
     // fill it from env (so WeeklyReport/Symptom correlation can work).
     useEffect(() => {
@@ -427,6 +464,8 @@ export default function App() {
                         <p className="text-xs text-muted">Nutrition</p>
                     </div>
                     <nav className="flex flex-col gap-0.5">
+                        <NavItem id="garden" active={activeTab === 'garden'} label="Garden" icon={Sprout} onClick={setActiveTab} />
+                        <NavItem id="insights" active={activeTab === 'insights'} label="Insights" icon={BarChart3} onClick={setActiveTab} />
                         <NavItem id="analyze" active={activeTab === 'analyze'} label="Analyze" icon={Camera} onClick={setActiveTab} />
                         <NavItem id="today" active={activeTab === 'today'} label="Today" icon={LayoutDashboard} onClick={setActiveTab} />
                         <NavItem id="week" active={activeTab === 'week'} label="Week" icon={Calendar} onClick={setActiveTab} />
@@ -503,15 +542,40 @@ export default function App() {
                             data={analysisResult}
                             image={analysisImage}
                             alreadySavedToJournal={!!analysisMeta?.fromApi}
+                            gardenUpdate={lastGardenUpdate}
+                            onViewGarden={() => {
+                                setLastGardenUpdate(null);
+                                setActiveTab('garden');
+                            }}
                             onSave={saveMeal}
                             onCancel={() => {
                                 setAnalysisResult(null);
                                 setAnalysisImage(null);
                                 setAnalysisMeta(null);
+                                setLastGardenUpdate(null);
                             }}
                         />
                     ) : (
                         <>
+                            {activeTab === 'garden' && (
+                                <HealthGarden
+                                    garden={garden}
+                                    environment={gardenEnvironment}
+                                    loading={gardenLoading}
+                                    profile={profile}
+                                    onScan={() => setActiveTab('analyze')}
+                                    onRefresh={loadGarden}
+                                />
+                            )}
+                            {activeTab === 'insights' && (
+                                <GardenInsights
+                                    garden={garden}
+                                    environment={gardenEnvironment}
+                                    profile={profile}
+                                    meals={displayMeals}
+                                    onOpenWeekly={() => setActiveTab('week')}
+                                />
+                            )}
                             {activeTab === 'analyze' && (
                                 <Dashboard profile={profile} meals={displayMeals} onAnalyze={handleAnalyze} />
                             )}
@@ -527,22 +591,26 @@ export default function App() {
                 </main>
 
                 {/* Mobile Nav - minimal pill bar */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-t border-foreground/[0.06] flex items-center justify-around px-4 z-40 safe-area-pb">
-                    <button onClick={() => setActiveTab('analyze')} className={`flex flex-col items-center gap-0.5 py-2 ${activeTab === 'analyze' ? 'text-foreground' : 'text-muted'}`}>
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-t border-foreground/[0.06] flex items-center justify-around px-1 z-40 safe-area-pb">
+                    <button onClick={() => setActiveTab('garden')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'garden' ? 'text-foreground' : 'text-muted'}`}>
+                        <Sprout size={20} strokeWidth={1.5} />
+                        <span className="text-[9px] font-medium truncate max-w-full">Garden</span>
+                    </button>
+                    <button onClick={() => setActiveTab('insights')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'insights' ? 'text-foreground' : 'text-muted'}`}>
+                        <BarChart3 size={20} strokeWidth={1.5} />
+                        <span className="text-[9px] font-medium truncate max-w-full">Stats</span>
+                    </button>
+                    <button onClick={() => setActiveTab('analyze')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'analyze' ? 'text-foreground' : 'text-muted'}`}>
                         <Camera size={22} strokeWidth={1.5} />
-                        <span className="text-[10px] font-medium">Analyze</span>
+                        <span className="text-[9px] font-medium truncate max-w-full">Scan</span>
                     </button>
-                    <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-0.5 py-2 ${activeTab === 'today' ? 'text-foreground' : 'text-muted'}`}>
-                        <LayoutDashboard size={22} strokeWidth={1.5} />
-                        <span className="text-[10px] font-medium">Today</span>
+                    <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'today' ? 'text-foreground' : 'text-muted'}`}>
+                        <LayoutDashboard size={20} strokeWidth={1.5} />
+                        <span className="text-[9px] font-medium truncate max-w-full">Today</span>
                     </button>
-                    <button onClick={() => setActiveTab('week')} className={`flex flex-col items-center gap-0.5 py-2 ${activeTab === 'week' ? 'text-foreground' : 'text-muted'}`}>
-                        <Calendar size={22} strokeWidth={1.5} />
-                        <span className="text-[10px] font-medium">Week</span>
-                    </button>
-                    <button onClick={() => setActiveTab('symptoms')} className={`flex flex-col items-center gap-0.5 py-2 ${activeTab === 'symptoms' ? 'text-foreground' : 'text-muted'}`}>
-                        <Activity size={22} strokeWidth={1.5} />
-                        <span className="text-[10px] font-medium">Symptoms</span>
+                    <button onClick={() => setActiveTab('symptoms')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'symptoms' ? 'text-foreground' : 'text-muted'}`}>
+                        <Activity size={20} strokeWidth={1.5} />
+                        <span className="text-[9px] font-medium truncate max-w-full">Body</span>
                     </button>
                     {supabase && (
                         <button
