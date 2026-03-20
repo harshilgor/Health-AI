@@ -8,7 +8,7 @@ import SymptomLog from './views/SymptomLog';
 import { analyzeMealWithGemini } from './lib/geminiClient';
 import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
 import { getOrCreateUserId } from './lib/userId';
-import { supabase } from './lib/supabaseClient';
+import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import AuthLanding from './views/AuthLanding';
@@ -362,11 +362,11 @@ export default function App() {
         return <PulseBackground />;
     }
 
-    if (supabase && !session) {
+    if (!session) {
         return (
             <>
                 <PulseBackground />
-                <AuthLanding supabase={supabase} />
+                <AuthLanding supabase={supabase} supabaseConfigured={supabaseConfigured} />
             </>
         );
     }
