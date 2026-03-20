@@ -1,5 +1,7 @@
-const GEMINI_MODEL = 'gemini-1.5-flash';
-const GEMINI_URL = `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`;
+const PRIMARY_MODEL = 'gemini-2.5-flash';
+const FALLBACK_MODEL = 'gemini-2.0-flash-lite';
+const geminiUrlForModel = (model) =>
+  `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent`;
 
 const systemInstruction = `You are an expert in nutritional biochemistry, physiology, and long-term health outcomes. Your role is to provide mechanistic, evidence-based analysis of how food affects the human body.
 
@@ -224,14 +226,10 @@ export default async function handler(req, res) {
     const cleanBase64 = image.includes(',') ? image.split(',')[1] : image;
 
     const payload = {
-      system_instruction: {
-        parts: [{ text: systemInstruction }],
-      },
       contents: [
         {
-          role: 'user',
           parts: [
-            { text: analysisPrompt },
+            { text: `${systemInstruction}\n\n${analysisPrompt}` },
             {
               inline_data: {
                 mime_type: mediaType,
@@ -241,17 +239,21 @@ export default async function handler(req, res) {
           ],
         },
       ],
-      generationConfig: {
-        temperature: 0.2,
-        response_mime_type: 'application/json',
-      },
+      generationConfig: { temperature: 0.2 },
     };
 
-    const response = await fetch(`${GEMINI_URL}?key=${apiKey}`, {
+    let response = await fetch(`${geminiUrlForModel(PRIMARY_MODEL)}?key=${apiKey}`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
     });
+    if (response.status === 404) {
+      response = await fetch(`${geminiUrlForModel(FALLBACK_MODEL)}?key=${apiKey}`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      });
+    }
 
     if (!response.ok) {
       const errText = await response.text();

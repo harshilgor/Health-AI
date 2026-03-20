@@ -6,7 +6,8 @@
     "dev": "vite",
     "dev:full": "vercel dev",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "test:gemini": "node test-gemini.js"
   },
   "dependencies": {
     "clsx": "^2.1.1",
