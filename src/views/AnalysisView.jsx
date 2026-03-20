@@ -103,8 +103,13 @@ export default function AnalysisView({
     alreadySavedToJournal = false,
     gardenUpdate = null,
     onViewGarden,
+    hasActivePlan = false,
+    onLogToPlan,
+    mealId,
 }) {
     const [isLogged, setIsLogged] = useState(false);
+    const [planLogged, setPlanLogged] = useState(false);
+    const [planLogging, setPlanLogging] = useState(false);
 
     const handleSave = () => {
         if (alreadySavedToJournal) {
@@ -513,8 +518,35 @@ export default function AnalysisView({
                             Log this meal <Save size={18} className="transition-transform group-hover:translate-x-1" />
                         </button>
                     ) : (
-                        <div className="bg-foreground text-background px-12 h-12 flex items-center gap-2 rounded-lg font-mono text-sm uppercase tracking-widest font-bold">
-                            Success <CheckCircle2 size={18} />
+                        <div className="flex items-center gap-3">
+                            <div className="bg-foreground text-background px-8 h-12 flex items-center gap-2 rounded-lg font-mono text-sm uppercase tracking-widest font-bold">
+                                Saved <CheckCircle2 size={18} />
+                            </div>
+                            {hasActivePlan && onLogToPlan && mealId && !planLogged && (
+                                <button
+                                    type="button"
+                                    onClick={async () => {
+                                        setPlanLogging(true);
+                                        try {
+                                            await onLogToPlan(mealId);
+                                            setPlanLogged(true);
+                                        } catch (e) {
+                                            console.error('Log to plan error:', e);
+                                        } finally {
+                                            setPlanLogging(false);
+                                        }
+                                    }}
+                                    disabled={planLogging}
+                                    className="btn-secondary flex items-center gap-2 h-12 px-6 text-sm disabled:opacity-50"
+                                >
+                                    {planLogging ? 'Logging...' : 'Log to Plan'}
+                                </button>
+                            )}
+                            {planLogged && (
+                                <span className="text-xs text-emerald-600 font-medium flex items-center gap-1">
+                                    <CheckCircle2 size={14} /> Plan updated
+                                </span>
+                            )}
                         </div>
                     )}
                 </div>

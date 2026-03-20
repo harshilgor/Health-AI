@@ -7,16 +7,21 @@ import WeeklyReport from './views/WeeklyReport';
 import SymptomLog from './views/SymptomLog';
 import HealthGarden from './views/HealthGarden';
 import GardenInsights from './views/GardenInsights';
+import PlanLibrary from './views/PlanLibrary';
+import PlanDetail from './views/PlanDetail';
+import ActivePlanDashboard from './views/ActivePlanDashboard';
+import PlanProgressReport from './views/PlanProgressReport';
 import { analyzeMealWithGemini } from './lib/geminiClient';
 import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
 import { fetchGarden } from './lib/gardenApi';
+import { listPlans as fetchPlans, getActivePlan, quitPlan, completeMealForPlan } from './lib/plansApi';
 import { getOrCreateUserId } from './lib/userId';
 import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import MarketingLanding from './views/MarketingLanding';
 import { getAuthRedirectUrl } from './lib/authRedirect';
-import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User, Sprout, BarChart3 } from 'lucide-react';
+import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User, Sprout, BarChart3, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PulseBackground = () => (
@@ -98,6 +103,11 @@ export default function App() {
     const [gardenEnvironment, setGardenEnvironment] = useState('partly');
     const [gardenLoading, setGardenLoading] = useState(false);
     const [lastGardenUpdate, setLastGardenUpdate] = useState(null);
+    const [allPlans, setAllPlans] = useState([]);
+    const [plansLoading, setPlansLoading] = useState(false);
+    const [activePlanData, setActivePlanData] = useState(null);
+    const [plansSubView, setPlansSubView] = useState('library');
+    const [selectedPlanSlug, setSelectedPlanSlug] = useState(null);
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analysisImage, setAnalysisImage] = useState(null);
     const [analysisMeta, setAnalysisMeta] = useState(null);
@@ -385,6 +395,42 @@ export default function App() {
         loadGarden();
     }, [session?.access_token, loadGarden]);
 
+    const loadPlans = useCallback(async () => {
+        const token = session?.access_token;
+        if (!token) return;
+        setPlansLoading(true);
+        try {
+            const plans = await fetchPlans(token);
+            setAllPlans(plans || []);
+        } catch (e) {
+            console.warn('Plans load:', e);
+        } finally {
+            setPlansLoading(false);
+        }
+    }, [session?.access_token]);
+
+    const loadActivePlan = useCallback(async () => {
+        const token = session?.access_token;
+        if (!token) return;
+        try {
+            const active = await getActivePlan(token);
+            setActivePlanData(active || null);
+            if (active) setPlansSubView('active');
+        } catch (e) {
+            console.warn('Active plan load:', e);
+        }
+    }, [session?.access_token]);
+
+    useEffect(() => {
+        if (!session?.access_token) {
+            setAllPlans([]);
+            setActivePlanData(null);
+            return;
+        }
+        loadPlans();
+        loadActivePlan();
+    }, [session?.access_token, loadPlans, loadActivePlan]);
+
     // If we loaded a profile from Supabase but don't have an API key locally,
     // fill it from env (so WeeklyReport/Symptom correlation can work).
     useEffect(() => {
@@ -472,6 +518,7 @@ export default function App() {
                         <NavItem id="today" active={activeTab === 'today'} label="Today" icon={LayoutDashboard} onClick={setActiveTab} />
                         <NavItem id="week" active={activeTab === 'week'} label="Week" icon={Calendar} onClick={setActiveTab} />
                         <NavItem id="symptoms" active={activeTab === 'symptoms'} label="Symptoms" icon={Activity} onClick={setActiveTab} />
+                        <NavItem id="plans" active={activeTab === 'plans'} label="Plans" icon={Target} onClick={setActiveTab} />
                     </nav>
                     <div className="mt-auto pt-6 border-t border-foreground/[0.06]">
                         <p className="text-xs text-muted truncate">{profile.goal}</p>
@@ -556,6 +603,14 @@ export default function App() {
                                 setAnalysisMeta(null);
                                 setLastGardenUpdate(null);
                             }}
+                            hasActivePlan={!!activePlanData}
+                            mealId={analysisMeta?.mealId}
+                            onLogToPlan={async (mId) => {
+                                const token = session?.access_token;
+                                if (!token) return;
+                                await completeMealForPlan(token, mId);
+                                loadActivePlan();
+                            }}
                         />
                     ) : (
                         <>
@@ -588,6 +643,51 @@ export default function App() {
                             {activeTab === 'symptoms' && (
                                 <SymptomLog profile={profile} logs={symptoms} meals={displayMeals} onLog={saveSymptom} />
                             )}
+                            {activeTab === 'plans' && (
+                                plansSubView === 'progress' ? (
+                                    <PlanProgressReport
+                                        token={session?.access_token}
+                                        onBack={() => setPlansSubView(activePlanData ? 'active' : 'library')}
+                                    />
+                                ) : plansSubView === 'active' && activePlanData ? (
+                                    <ActivePlanDashboard
+                                        activePlan={activePlanData}
+                                        token={session?.access_token}
+                                        onScan={() => setActiveTab('analyze')}
+                                        onViewProgress={() => setPlansSubView('progress')}
+                                        onBack={() => setPlansSubView('library')}
+                                        onQuit={async () => {
+                                            try {
+                                                await quitPlan(session?.access_token);
+                                                setActivePlanData(null);
+                                                setPlansSubView('library');
+                                                loadActivePlan();
+                                            } catch (e) {
+                                                console.error('Quit plan error:', e);
+                                            }
+                                        }}
+                                    />
+                                ) : plansSubView === 'detail' && selectedPlanSlug ? (
+                                    <PlanDetail
+                                        slug={selectedPlanSlug}
+                                        token={session?.access_token}
+                                        onBack={() => { setPlansSubView('library'); setSelectedPlanSlug(null); }}
+                                        onEnrolled={() => {
+                                            loadActivePlan();
+                                            loadPlans();
+                                            setPlansSubView('active');
+                                        }}
+                                    />
+                                ) : (
+                                    <PlanLibrary
+                                        plans={allPlans}
+                                        loading={plansLoading}
+                                        onSelectPlan={(slug) => { setSelectedPlanSlug(slug); setPlansSubView('detail'); }}
+                                        activePlan={activePlanData}
+                                        onGoToActive={() => setPlansSubView('active')}
+                                    />
+                                )
+                            )}
                         </>
                     )}
                 </main>
@@ -610,9 +710,9 @@ export default function App() {
                         <LayoutDashboard size={20} strokeWidth={1.5} />
                         <span className="text-[9px] font-medium truncate max-w-full">Today</span>
                     </button>
-                    <button onClick={() => setActiveTab('symptoms')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'symptoms' ? 'text-foreground' : 'text-muted'}`}>
-                        <Activity size={20} strokeWidth={1.5} />
-                        <span className="text-[9px] font-medium truncate max-w-full">Body</span>
+                    <button onClick={() => setActiveTab('plans')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'plans' ? 'text-foreground' : 'text-muted'}`}>
+                        <Target size={20} strokeWidth={1.5} />
+                        <span className="text-[9px] font-medium truncate max-w-full">Plans</span>
                     </button>
                     {supabase && (
                         <button

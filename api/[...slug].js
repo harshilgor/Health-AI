@@ -6,6 +6,7 @@ import { handleProfile } from '../server-lib/handlers/profile.js';
 import { handleGarden } from '../server-lib/handlers/garden.js';
 import { handleSymptoms } from '../server-lib/handlers/symptoms.js';
 import { handleMeals } from '../server-lib/handlers/meals.js';
+import { handlePlans } from '../server-lib/handlers/plans.js';
 
 function normalizeSlug(slug) {
   if (slug == null) return [];
@@ -48,6 +49,10 @@ export default async function handler(req, res) {
 
   if (a === 'meals') {
     return handleMeals(req, res, parts.slice(1));
+  }
+
+  if (a === 'plans') {
+    return handlePlans(req, res, parts.slice(1));
   }
 
   return res.status(404).json({ error: 'Not found' });
