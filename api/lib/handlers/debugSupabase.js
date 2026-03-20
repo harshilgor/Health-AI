@@ -1,10 +1,10 @@
-import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../lib/supabaseServer.js';
+import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../supabaseServer.js';
 
 function jsonError(res, status, message, details) {
   return res.status(status).json({ error: message, details });
 }
 
-export default async function handler(req, res) {
+export async function handleDebugSupabase(req, res) {
   if (req.method !== 'GET') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -27,11 +27,7 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 1) DB connectivity check (should succeed if table exists + network OK)
-    const { data: meals, error: dbErr } = await supabase
-      .from('meals')
-      .select('meal_id')
-      .limit(1);
+    const { data: meals, error: dbErr } = await supabase.from('meals').select('meal_id').limit(1);
 
     if (dbErr) {
       return jsonError(res, 500, 'DB query failed', {
@@ -41,10 +37,7 @@ export default async function handler(req, res) {
       });
     }
 
-    // 2) Storage connectivity + bucket existence check
-    const { error: listErr } = await supabase.storage
-      .from(MEAL_IMAGES_BUCKET)
-      .list('');
+    const { error: listErr } = await supabase.storage.from(MEAL_IMAGES_BUCKET).list('');
 
     if (listErr) {
       return jsonError(res, 500, 'Storage bucket check failed', {
@@ -68,4 +61,3 @@ export default async function handler(req, res) {
     });
   }
 }
-

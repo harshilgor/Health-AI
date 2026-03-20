@@ -1,9 +1,9 @@
 import { randomUUID } from 'crypto';
-import { analyzeFoodImage } from '../lib/geminiFoodAnalysis.js';
-import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../lib/supabaseServer.js';
-import { getAuthedUserId } from '../lib/authUser.js';
-import { scoreMealForGarden } from '../lib/gardenScoring.js';
-import { applyScoringToGarden } from '../lib/gardenState.js';
+import { analyzeFoodImage } from '../geminiFoodAnalysis.js';
+import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../supabaseServer.js';
+import { getAuthedUserId } from '../authUser.js';
+import { scoreMealForGarden } from '../gardenScoring.js';
+import { applyScoringToGarden } from '../gardenState.js';
 
 const ALLOWED_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
 
@@ -21,11 +21,7 @@ function normalizeMealType(v) {
   return ALLOWED_MEAL_TYPES.has(t) ? t : 'lunch';
 }
 
-/**
- * GET /api/meals?user_id= — list meals for user
- * POST /api/meals — upload image, analyze, persist
- */
-export default async function handler(req, res) {
+async function handleMealsCollection(req, res) {
   const supabase = getSupabaseAdmin();
 
   if (req.method === 'GET') {
@@ -33,7 +29,6 @@ export default async function handler(req, res) {
     try {
       userId = await getAuthedUserId(req);
     } catch (e) {
-      // Token present but invalid.
       return jsonError(res, e?.status || 401, e?.message || 'Unauthorized');
     }
     if (!userId) return jsonError(res, 401, 'Authorization token required');
@@ -207,4 +202,107 @@ export default async function handler(req, res) {
 
   res.setHeader('Allow', 'GET, POST');
   return jsonError(res, 405, 'Method not allowed');
+}
+
+async function handleMealById(req, res, id) {
+  const supabase = getSupabaseAdmin();
+  if (!supabase) {
+    return jsonError(res, 503, 'Meal storage is not configured.', { code: 'STORAGE_NOT_CONFIGURED' });
+  }
+
+  const mealId = typeof id === 'string' ? id.trim() : '';
+  let userId = null;
+  try {
+    userId = await getAuthedUserId(req);
+  } catch (e) {
+    return jsonError(res, e?.status || 401, e?.message || 'Unauthorized');
+  }
+  if (!userId) {
+    return jsonError(res, 401, 'Authorization token required');
+  }
+
+  if (!mealId) {
+    return jsonError(res, 400, 'Missing meal id');
+  }
+
+  if (req.method === 'GET') {
+    try {
+      const { data, error } = await supabase
+        .from('meals')
+        .select(
+          'meal_id,user_id,image_url,image_path,meal_type,location,recorded_at,analysis_result'
+        )
+        .eq('meal_id', mealId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (error) {
+        console.error('meal get error:', error);
+        return jsonError(res, 500, 'Failed to load meal', { details: error.message });
+      }
+      if (!data) {
+        return jsonError(res, 404, 'Meal not found');
+      }
+
+      const ui = data.analysis_result?.ui || null;
+      return res.status(200).json({
+        ...data,
+        analysis: ui,
+      });
+    } catch (e) {
+      console.error(e);
+      return jsonError(res, 500, e.message || 'Failed to load meal');
+    }
+  }
+
+  if (req.method === 'DELETE') {
+    try {
+      const { data: row, error: fetchErr } = await supabase
+        .from('meals')
+        .select('meal_id,image_path')
+        .eq('meal_id', mealId)
+        .eq('user_id', userId)
+        .maybeSingle();
+
+      if (fetchErr) {
+        return jsonError(res, 500, 'Failed to load meal', { details: fetchErr.message });
+      }
+      if (!row) {
+        return jsonError(res, 404, 'Meal not found');
+      }
+
+      const { error: delErr } = await supabase.from('meals').delete().eq('meal_id', mealId).eq('user_id', userId);
+
+      if (delErr) {
+        return jsonError(res, 500, 'Failed to delete meal', { details: delErr.message });
+      }
+
+      if (row.image_path) {
+        await supabase.storage.from(MEAL_IMAGES_BUCKET).remove([row.image_path]).catch((err) => {
+          console.warn('Storage delete warning:', err?.message);
+        });
+      }
+
+      return res.status(200).json({ ok: true, meal_id: mealId });
+    } catch (e) {
+      console.error(e);
+      return jsonError(res, 500, e.message || 'Delete failed');
+    }
+  }
+
+  res.setHeader('Allow', 'GET, DELETE');
+  return jsonError(res, 405, 'Method not allowed');
+}
+
+/**
+ * tail: path segments after "meals" — [] for /api/meals, [id] for /api/meals/:id
+ */
+export async function handleMeals(req, res, tail) {
+  if (!tail || tail.length === 0) {
+    return handleMealsCollection(req, res);
+  }
+  if (tail.length === 1) {
+    return handleMealById(req, res, tail[0]);
+  }
+  return res.status(404).json({ error: 'Not found' });
 }

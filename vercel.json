@@ -3,29 +3,8 @@
   "outputDirectory": "dist",
   "rewrites": [{ "source": "/((?!api/).*)", "destination": "/index.html" }],
   "functions": {
-    "api/logmeal/analyze.js": {
-      "maxDuration": 30
-    },
-    "api/meals/index.js": {
+    "api/[...slug].js": {
       "maxDuration": 60
-    },
-    "api/meals/[id].js": {
-      "maxDuration": 30
-    },
-    "api/gemini/analyze.js": {
-      "maxDuration": 60
-    },
-    "api/debug/supabase.js": {
-      "maxDuration": 30
-    },
-    "api/profile/index.js": {
-      "maxDuration": 30
-    },
-    "api/symptoms/index.js": {
-      "maxDuration": 30
-    },
-    "api/garden/index.js": {
-      "maxDuration": 30
     }
   }
 }

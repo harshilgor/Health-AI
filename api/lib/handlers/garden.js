@@ -1,5 +1,5 @@
-import { getSupabaseAdmin } from '../lib/supabaseServer.js';
-import { getAuthedUserId } from '../lib/authUser.js';
+import { getSupabaseAdmin } from '../supabaseServer.js';
+import { getAuthedUserId } from '../authUser.js';
 
 function jsonError(res, status, message, extra = {}) {
   return res.status(status).json({ error: message, ...extra });
@@ -8,14 +8,15 @@ function jsonError(res, status, message, extra = {}) {
 function environmentFromScores(g) {
   if (!g) return 'partly';
   const avg =
-    (g.heart + g.brain + g.gut + g.muscle + g.immune + (g.bones_unlocked ? g.bones : 50)) / (g.bones_unlocked ? 6 : 5);
+    (g.heart + g.brain + g.gut + g.muscle + g.immune + (g.bones_unlocked ? g.bones : 50)) /
+    (g.bones_unlocked ? 6 : 5);
   if (avg >= 78) return 'clear';
   if (avg >= 55) return 'partly';
   if (avg >= 35) return 'foggy';
   return 'rainy';
 }
 
-export default async function handler(req, res) {
+export async function handleGarden(req, res) {
   if (req.method !== 'GET') {
     res.setHeader('Allow', 'GET');
     return jsonError(res, 405, 'Method not allowed');

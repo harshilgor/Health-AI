@@ -1,9 +1,5 @@
 import FormData from 'form-data';
 
-// LogMeal API (https://api.logmeal.com) — official paths from docs.logmeal.com:
-// 1. POST /v2/image/segmentation/complete — upload image, get imageId + segmentation_results
-// 2. POST /v2/image/confirm/dish — confirm dish IDs per segment (required before nutrition on some plans)
-// 3. POST /v2/nutrition/recipe/nutritionalInfo — get nutritional info by imageId
 const LOGMEAL_BASE = 'https://api.logmeal.com';
 
 function streamToBuffer(stream) {
@@ -24,7 +20,7 @@ async function buildMultipartBody(base64Image, mediaType) {
   return { headers, body };
 }
 
-export default async function handler(req, res) {
+export async function handleLogmealAnalyze(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -54,28 +50,28 @@ export default async function handler(req, res) {
       body: formBody,
     });
 
-    // If we used an APICompany token instead of an APIUser token, LogMeal returns a specific error (often 401 with code 802).
-    // Let's dynamically create an APIUser token if that happens.
     if (!segRes.ok && (segRes.status === 401 || segRes.status === 400)) {
       const errText = await segRes.text();
       try {
         const errJson = JSON.parse(errText);
         if (errJson.code === 802 || errJson.message?.includes('User not allowed')) {
-          console.log("APICompany token detected. Generating ephemeral APIUser token...");
+          console.log('APICompany token detected. Generating ephemeral APIUser token...');
           const signUpRes = await fetch(`${LOGMEAL_BASE}/v2/users/signUp`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',
-              Authorization: `Bearer ${token}`
+              Authorization: `Bearer ${token}`,
             },
-            body: JSON.stringify({ username: `nouris_user_${Date.now()}_${Math.floor(Math.random() * 10000)}` })
+            body: JSON.stringify({
+              username: `nouris_user_${Date.now()}_${Math.floor(Math.random() * 10000)}`,
+            }),
           });
 
           if (signUpRes.ok) {
             const signUpJson = await signUpRes.json();
             currentToken = signUpJson.token;
-            global._nourisLogMealToken = currentToken; // Cache it globally
-            console.log("Successfully generated APIUser token.");
+            global._nourisLogMealToken = currentToken;
+            console.log('Successfully generated APIUser token.');
 
             const retry = await buildMultipartBody(base64Image, mediaType);
             segRes = await fetch(`${LOGMEAL_BASE}/v2/image/segmentation/complete?language=eng`, {
@@ -87,14 +83,13 @@ export default async function handler(req, res) {
               body: retry.body,
             });
           } else {
-            console.error("Failed to generate APIUser token", await signUpRes.text());
+            console.error('Failed to generate APIUser token', await signUpRes.text());
             segRes = { ok: false, status: segRes.status, text: async () => errText };
           }
         } else {
-          // Pass the error down to the next block
           segRes = { ok: false, status: segRes.status, text: async () => errText };
         }
-      } catch (e) {
+      } catch {
         segRes = { ok: false, status: segRes.status, text: async () => errText };
       }
     }
@@ -105,7 +100,7 @@ export default async function handler(req, res) {
       try {
         const errJson = JSON.parse(errText);
         if (errJson.message) msg = errJson.message;
-      } catch (_) { }
+      } catch (_) {}
       return res.status(segRes.status >= 500 ? 502 : segRes.status).json({
         error: msg,
         details: errText.slice(0, 200),
@@ -120,7 +115,6 @@ export default async function handler(req, res) {
       });
     }
 
-    // Confirm dishes (top-1 per segment) so /recipe/nutritionalInfo has confirmed items
     const segments = segmentation.segmentation_results || [];
     if (segments.length > 0) {
       const confirmedClass = [];
@@ -179,7 +173,7 @@ export default async function handler(req, res) {
       try {
         const errJson = JSON.parse(errText);
         if (errJson.message) msg = errJson.message;
-      } catch (_) { }
+      } catch (_) {}
       return res.status(nutRes.status >= 500 ? 502 : nutRes.status).json({
         error: msg,
         details: errText.slice(0, 200),

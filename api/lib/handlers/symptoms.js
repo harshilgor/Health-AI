@@ -1,11 +1,11 @@
-import { getSupabaseAdmin } from '../lib/supabaseServer.js';
-import { getAuthedUserId } from '../lib/authUser.js';
+import { getSupabaseAdmin } from '../supabaseServer.js';
+import { getAuthedUserId } from '../authUser.js';
 
 function jsonError(res, status, message, extra = {}) {
   return res.status(status).json({ error: message, ...extra });
 }
 
-export default async function handler(req, res) {
+export async function handleSymptoms(req, res) {
   if (req.method !== 'GET' && req.method !== 'POST') {
     return jsonError(res, 405, 'Method not allowed');
   }
@@ -73,4 +73,3 @@ export default async function handler(req, res) {
     },
   });
 }
-

@@ -1,4 +1,4 @@
-import { buildPackagedAnalysis } from '../../src/lib/packaged.js';
+import { buildPackagedAnalysis } from '../../../src/lib/packaged.js';
 
 const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate';
 
@@ -32,7 +32,6 @@ function extractBarcodeAndQuery(visionResult) {
   const text = visionResult.textAnnotations?.[0]?.description || '';
   const lines = text.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
 
-  // Try to find a plausible barcode
   const barcodeMatch = text.match(/\b(\d{8,14})\b/);
   const barcode = barcodeMatch ? barcodeMatch[1] : null;
 
@@ -40,7 +39,6 @@ function extractBarcodeAndQuery(visionResult) {
   const brand = logo || '';
   const firstLine = lines[0] || '';
 
-  // Build a simple query: brand + first text line
   const query = [brand, firstLine].filter(Boolean).join(' ');
 
   return { barcode, brand, query: query || brand || firstLine || 'food product' };
@@ -69,7 +67,7 @@ async function fetchOpenFoodFacts({ barcode, query }) {
   return searchJson;
 }
 
-export default async function handler(req, res) {
+export async function handlePackagedAnalyze(req, res) {
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
   }
@@ -88,9 +86,7 @@ export default async function handler(req, res) {
       return res.status(400).json({ error: 'Missing image in request body' });
     }
 
-    const cleanBase64 = base64Image.includes(',')
-      ? base64Image.split(',')[1]
-      : base64Image;
+    const cleanBase64 = base64Image.includes(',') ? base64Image.split(',')[1] : base64Image;
 
     const visionResult = await callGoogleVision(cleanBase64, apiKey);
     const { barcode, brand, query } = extractBarcodeAndQuery(visionResult);
@@ -109,4 +105,3 @@ export default async function handler(req, res) {
     });
   }
 }
-
