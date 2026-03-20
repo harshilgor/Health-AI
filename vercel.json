@@ -14,6 +14,9 @@
     },
     "api/gemini/analyze.js": {
       "maxDuration": 60
+    },
+    "api/debug/supabase.js": {
+      "maxDuration": 30
     }
   }
 }
