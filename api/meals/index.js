@@ -111,9 +111,10 @@ export default async function handler(req, res) {
       if (upErr) {
         console.error('Storage upload error:', upErr);
         return jsonError(res, 500, 'Failed to upload image', {
-          details: upErr.message || String(upErr),
+          details: upErr?.message || upErr?.toString?.() || String(upErr),
           bucket: MEAL_IMAGES_BUCKET,
           path: imagePath,
+          supabaseError: upErr ? { name: upErr.name, status: upErr.status, statusCode: upErr.statusCode } : undefined,
         });
       }
 
