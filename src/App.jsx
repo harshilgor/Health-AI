@@ -12,7 +12,7 @@ import { supabase } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import AuthLanding from './views/AuthLanding';
-import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X } from 'lucide-react';
+import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PulseBackground = () => (
@@ -98,6 +98,22 @@ export default function App() {
     const [error, setError] = useState(null);
     const originalImageRef = useRef(null);
 
+    const handleGoogleSignIn = () => {
+        if (!supabase) return;
+        return supabase.auth.signInWithOAuth({
+            provider: 'google',
+            options: {
+                redirectTo: window.location.origin,
+                queryParams: { prompt: 'select_account' },
+            },
+        });
+    };
+
+    const handleSignOut = () => {
+        if (!supabase) return;
+        return supabase.auth.signOut();
+    };
+
     const displayMeals = useMemo(() => {
         if (!mealsApiConfigured) return meals;
         const byId = new Map(remoteMeals.map((m) => [String(m.id), m]));
@@ -138,6 +154,13 @@ export default function App() {
     useEffect(() => {
         if (authLoading) return;
         let cancelled = false;
+
+        // Not logged in yet: don't call protected meal endpoints.
+        if (!session?.access_token) {
+            setRemoteMeals([]);
+            setMealsApiConfigured(false);
+            return;
+        }
 
         // Clear local state when switching to an authed user.
         if (session) {
@@ -416,6 +439,34 @@ export default function App() {
                     <div className="mt-auto pt-6 border-t border-foreground/[0.06]">
                         <p className="text-xs text-muted truncate">{profile.goal}</p>
                         <p className="text-xs text-foreground/70 mt-0.5">{profile.age}y · {profile.sex}</p>
+
+                        {supabase && (
+                            <div className="mt-4 space-y-2">
+                                {session ? (
+                                    <div className="text-xs text-muted truncate">
+                                        <div className="flex items-center gap-2">
+                                            <User size={14} strokeWidth={1.5} />
+                                            <span className="truncate">
+                                                {session?.user?.email || 'Signed in'}
+                                            </span>
+                                        </div>
+                                        <button
+                                            onClick={handleSignOut}
+                                            className="btn-secondary w-full h-9 mt-2"
+                                        >
+                                            Sign out
+                                        </button>
+                                    </div>
+                                ) : (
+                                    <button
+                                        onClick={handleGoogleSignIn}
+                                        className="btn-primary w-full h-9"
+                                    >
+                                        Sign in with Google
+                                    </button>
+                                )}
+                            </div>
+                        )}
                     </div>
                 </aside>
 
@@ -497,6 +548,21 @@ export default function App() {
                         <Activity size={22} strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Symptoms</span>
                     </button>
+                    {supabase && (
+                        <button
+                            onClick={() => (session ? handleSignOut() : handleGoogleSignIn())}
+                            className="flex flex-col items-center gap-0.5 py-2 text-muted hover:text-foreground"
+                        >
+                            {session ? (
+                                <LogOut size={22} strokeWidth={1.5} />
+                            ) : (
+                                <LogIn size={22} strokeWidth={1.5} />
+                            )}
+                            <span className="text-[10px] font-medium">
+                                {session ? 'Sign out' : 'Account'}
+                            </span>
+                        </button>
+                    )}
                 </nav>
             </div>
         </div>
