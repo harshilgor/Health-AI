@@ -11,6 +11,7 @@ import {
   ChevronDown,
   UtensilsCrossed,
   HeartPulse,
+  Sprout,
 } from 'lucide-react';
 import { getAuthRedirectUrl } from '../lib/authRedirect';
 
@@ -60,6 +61,11 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
   ];
 
   const features = [
+    {
+      icon: Sprout,
+      title: 'Health garden',
+      desc: 'Watch a visual garden grow as you log meals — each organ reflects patterns from your nutrition (motivational, not medical).',
+    },
     {
       icon: Camera,
       title: 'Photo meal analysis',

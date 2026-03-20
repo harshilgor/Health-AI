@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { ChevronRight, ArrowLeft } from 'lucide-react';
 
-export default function Onboarding({ onComplete }) {
+export default function Onboarding({ onComplete, canSkipApiKey = false }) {
     const [step, setStep] = useState(0);
     const [profile, setProfile] = useState({
         api_key: import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY || '',
@@ -46,15 +46,17 @@ export default function Onboarding({ onComplete }) {
         const apiKey =
             profile.api_key ||
             import.meta.env.VITE_ANTHROPIC_API_KEY ||
-            import.meta.env.VITE_API_KEY;
-        if (!apiKey)
+            import.meta.env.VITE_API_KEY ||
+            '';
+        if (!apiKey && !canSkipApiKey) {
             return alert(
-                'Please enter an API Key or add VITE_ANTHROPIC_API_KEY to your .env file'
+                'Please add VITE_ANTHROPIC_API_KEY to your environment, or sign in with Google — meal scan works on our servers without this key.'
             );
+        }
         const targets = calculateTargets(profile);
         const fullProfile = {
             ...profile,
-            api_key: apiKey,
+            api_key: apiKey || '',
             ...targets,
             joined: new Date().toISOString(),
         };

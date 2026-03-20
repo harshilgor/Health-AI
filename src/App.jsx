@@ -318,8 +318,6 @@ export default function App() {
         const token = session?.access_token;
         if (!token) return;
 
-        const localApiKey = profile?.api_key || envApiKey;
-
         setUserDataLoading(true);
 
         // Clear local cache while we load the authed user's persisted data.
@@ -335,9 +333,10 @@ export default function App() {
                 ]);
 
                 if (savedProfile) {
+                    // api_key is client-only (weekly AI); not stored in Supabase. Prefer env, not stale closure.
                     setProfile({
                         ...savedProfile,
-                        api_key: localApiKey,
+                        api_key: envApiKey || '',
                     });
                 }
 
@@ -414,6 +413,7 @@ export default function App() {
             <>
                 <PulseBackground />
                 <Onboarding
+                    canSkipApiKey={!!session}
                     onComplete={async (p) => {
                         setProfile(p);
                         if (session) {
@@ -430,11 +430,13 @@ export default function App() {
         );
     }
 
-    if (!profile.api_key && !envApiKey) {
+    // Signed-in users use backend Gemini for meals; Anthropic key is optional (weekly report only).
+    if (!session && !profile.api_key && !envApiKey) {
         return (
             <>
                 <PulseBackground />
                 <Onboarding
+                    canSkipApiKey={false}
                     onComplete={async (p) => {
                         setProfile(p);
                         if (session) {
