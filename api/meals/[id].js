@@ -1,4 +1,5 @@
 import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../lib/supabaseServer.js';
+import { getAuthedUserId } from '../lib/authUser.js';
 
 function jsonError(res, status, message, extra = {}) {
   return res.status(status).json({ error: message, ...extra });
@@ -15,14 +16,20 @@ export default async function handler(req, res) {
   }
 
   const id = typeof req.query.id === 'string' ? req.query.id.trim() : '';
-  const userId = typeof req.query.user_id === 'string' ? req.query.user_id.trim() : '';
+  let userId = null;
+  try {
+    userId = await getAuthedUserId(req);
+  } catch (e) {
+    return jsonError(res, e?.status || 401, e?.message || 'Unauthorized');
+  }
+  if (!userId) {
+    return jsonError(res, 401, 'Authorization token required');
+  }
 
   if (!id) {
     return jsonError(res, 400, 'Missing meal id');
   }
-  if (!userId) {
-    return jsonError(res, 400, 'Missing user_id query parameter');
-  }
+  // userId is guaranteed when reaching here.
 
   if (req.method === 'GET') {
     try {

@@ -17,6 +17,12 @@
     },
     "api/debug/supabase.js": {
       "maxDuration": 30
+    },
+    "api/profile/index.js": {
+      "maxDuration": 30
+    },
+    "api/symptoms/index.js": {
+      "maxDuration": 30
     }
   }
 }

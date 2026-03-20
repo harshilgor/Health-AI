@@ -8,6 +8,10 @@ import SymptomLog from './views/SymptomLog';
 import { analyzeMealWithGemini } from './lib/geminiClient';
 import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
 import { getOrCreateUserId } from './lib/userId';
+import { supabase } from './lib/supabaseClient';
+import { getProfile, saveProfile } from './lib/profileApi';
+import { listSymptoms, createSymptom } from './lib/symptomsApi';
+import AuthLanding from './views/AuthLanding';
 import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -79,9 +83,12 @@ export default function App() {
     const [profile, setProfile] = useLocalStorage('nouris_profile', null);
     const [meals, setMeals] = useLocalStorage('nouris_meals', []);
     const [symptoms, setSymptoms] = useLocalStorage('nouris_symptoms', []);
-    const [userId] = useState(() => getOrCreateUserId());
+    const [anonUserId] = useState(() => getOrCreateUserId());
     const [remoteMeals, setRemoteMeals] = useState([]);
     const [mealsApiConfigured, setMealsApiConfigured] = useState(false);
+    const [session, setSession] = useState(null);
+    const [authLoading, setAuthLoading] = useState(true);
+    const [userDataLoading, setUserDataLoading] = useState(false);
     const [activeTab, setActiveTab] = useState('analyze');
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analysisImage, setAnalysisImage] = useState(null);
@@ -104,8 +111,41 @@ export default function App() {
     }, [mealsApiConfigured, remoteMeals, meals]);
 
     useEffect(() => {
+        if (!supabase) {
+            // Supabase isn't configured for this environment; keep anonymous/local mode.
+            setAuthLoading(false);
+            return;
+        }
+
+        let isCancelled = false;
+
+        supabase.auth.getSession().then(({ data }) => {
+            if (isCancelled) return;
+            setSession(data?.session || null);
+            setAuthLoading(false);
+        });
+
+        const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
+            setSession(newSession || null);
+        });
+
+        return () => {
+            isCancelled = true;
+            subscription?.unsubscribe();
+        };
+    }, []);
+
+    useEffect(() => {
+        if (authLoading) return;
         let cancelled = false;
-        listMeals(userId)
+
+        // Clear local state when switching to an authed user.
+        if (session) {
+            setMeals([]);
+            setSymptoms([]);
+        }
+
+        listMeals({ accessToken: session?.access_token, userId: anonUserId })
             .then(({ meals: rows, configured }) => {
                 if (cancelled) return;
                 setMealsApiConfigured(!!configured);
@@ -116,10 +156,11 @@ export default function App() {
                 setRemoteMeals([]);
                 setMealsApiConfigured(false);
             });
+
         return () => {
             cancelled = true;
         };
-    }, [userId]);
+    }, [authLoading, session, anonUserId, setMeals, setSymptoms]);
 
     const handleAnalyze = async (base64, mediaType = 'image/jpeg', opts = {}) => {
         const mealType = opts.mealType ?? 'lunch';
@@ -134,22 +175,14 @@ export default function App() {
         try {
             try {
                 const created = await createMeal({
-                    userId,
+                    accessToken: session?.access_token,
+                    userId: anonUserId,
                     base64Image: base64,
                     mediaType,
                     mealType,
                     location,
                 });
-                const localRow = apiMealToLocal({
-                    meal_id: created.meal_id,
-                    user_id: created.user_id,
-                    image_url: created.image_url,
-                    image_path: created.image_path,
-                    meal_type: created.meal_type,
-                    location: created.location,
-                    recorded_at: created.recorded_at,
-                    analysis_result: created.analysis_result || { ui: created.analysis },
-                });
+                const localRow = apiMealToLocal(created);
                 setRemoteMeals((prev) => [
                     localRow,
                     ...prev.filter((x) => x.meal_id !== localRow.meal_id),
@@ -159,7 +192,12 @@ export default function App() {
                 setAnalysisImage(created.image_url || base64);
                 setAnalysisMeta({ fromApi: true, mealId: created.meal_id });
             } catch (e) {
-                if (e.code === 'STORAGE_NOT_CONFIGURED' || e.status === 503) {
+                if (
+                    e.code === 'STORAGE_NOT_CONFIGURED' ||
+                    e.status === 503 ||
+                    e.status === 401 ||
+                    e.status === 403
+                ) {
                     const result = await analyzeMealWithGemini(base64, mediaType);
                     setAnalysisResult(result);
                     setAnalysisImage(base64);
@@ -198,12 +236,26 @@ export default function App() {
     };
 
     const saveSymptom = (symptomData) => {
-        setSymptoms([symptomData, ...symptoms]);
+        if (!session) {
+            setSymptoms([symptomData, ...symptoms]);
+            return;
+        }
+
+        const token = session?.access_token;
+        if (!token) return;
+
+        createSymptom(token, symptomData)
+            .then((log) => {
+                if (!log) return;
+                setSymptoms((prev) => [log, ...prev]);
+            })
+            .catch((e) => console.error('Failed to save symptom:', e));
     };
 
     const envApiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
 
     useEffect(() => {
+        if (session) return;
         if (!profile && envApiKey) {
             const defaultProfile = {
                 api_key: envApiKey,
@@ -221,16 +273,124 @@ export default function App() {
             };
             setProfile(defaultProfile);
         }
-    }, []);
+    }, [session, profile, envApiKey]);
 
-    if (!profile) {
-        if (envApiKey) {
-            return <PulseBackground />;
-        }
+    useEffect(() => {
+        if (!session) return;
+
+        const token = session?.access_token;
+        if (!token) return;
+
+        const localApiKey = profile?.api_key || envApiKey;
+
+        setUserDataLoading(true);
+
+        // Clear local cache while we load the authed user's persisted data.
+        setMeals([]);
+        setSymptoms([]);
+        setProfile(null);
+
+        const load = async () => {
+            try {
+                const [savedProfile, savedSymptoms] = await Promise.all([
+                    getProfile(token),
+                    listSymptoms(token),
+                ]);
+
+                if (savedProfile) {
+                    setProfile({
+                        ...savedProfile,
+                        api_key: localApiKey,
+                    });
+                }
+
+                if (Array.isArray(savedSymptoms)) {
+                    setSymptoms(
+                        savedSymptoms.map((s) => ({
+                            ...s,
+                            // Preserve the UI's expected shape.
+                            date: s.date,
+                        }))
+                    );
+                }
+            } catch (e) {
+                console.error('Failed to load authed user data:', e);
+                setProfile(null);
+                setSymptoms([]);
+            } finally {
+                setUserDataLoading(false);
+            }
+        };
+
+        load();
+    }, [session, envApiKey]);
+
+    // If we loaded a profile from Supabase but don't have an API key locally,
+    // fill it from env (so WeeklyReport/Symptom correlation can work).
+    useEffect(() => {
+        if (!session) return;
+        if (!profile) return;
+        if (profile.api_key) return;
+        if (!envApiKey) return;
+        setProfile({ ...profile, api_key: envApiKey });
+    }, [session, profile, envApiKey]);
+
+    if (authLoading) {
+        return <PulseBackground />;
+    }
+
+    if (supabase && !session) {
         return (
             <>
                 <PulseBackground />
-                <Onboarding onComplete={p => setProfile(p)} />
+                <AuthLanding supabase={supabase} />
+            </>
+        );
+    }
+
+    if (session && userDataLoading) {
+        return <PulseBackground />;
+    }
+
+    if (!profile) {
+        if (!session && envApiKey) return <PulseBackground />;
+        return (
+            <>
+                <PulseBackground />
+                <Onboarding
+                    onComplete={async (p) => {
+                        setProfile(p);
+                        if (session) {
+                            const token = session?.access_token;
+                            try {
+                                await saveProfile(token, p);
+                            } catch (e) {
+                                console.error('Failed to save profile:', e);
+                            }
+                        }
+                    }}
+                />
+            </>
+        );
+    }
+
+    if (!profile.api_key && !envApiKey) {
+        return (
+            <>
+                <PulseBackground />
+                <Onboarding
+                    onComplete={async (p) => {
+                        setProfile(p);
+                        if (session) {
+                            const token = session?.access_token;
+                            try {
+                                await saveProfile(token, p);
+                            } catch (e) {
+                                console.error('Failed to save profile:', e);
+                            }
+                        }
+                    }}
+                />
             </>
         );
     }

@@ -15,6 +15,7 @@ function ensureDataUrl(input, mediaType) {
  * POST /api/meals — returns 503 with code STORAGE_NOT_CONFIGURED if Supabase missing.
  */
 export async function createMeal({
+  accessToken,
   userId,
   base64Image,
   mediaType = 'image/jpeg',
@@ -26,16 +27,21 @@ export async function createMeal({
   const compressedDataUrl = await compressImageDataUrl(normalized, 960, 0.65);
   const payloadMediaType = 'image/jpeg';
 
+  const headers = { 'Content-Type': 'application/json' };
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const body = {
+    image: compressedDataUrl,
+    mediaType: payloadMediaType,
+    meal_type: mealType,
+    location: location || '',
+  };
+  if (!accessToken && userId) body.user_id = userId;
+
   const res = await fetch(`${apiBase()}/api/meals`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      user_id: userId,
-      image: compressedDataUrl,
-      mediaType: payloadMediaType,
-      meal_type: mealType,
-      location: location || '',
-    }),
+    headers,
+    body: JSON.stringify(body),
   });
 
   const data = await res.json().catch(() => ({}));
@@ -47,56 +53,86 @@ export async function createMeal({
   }
   if (!res.ok) {
     if (res.status === 413) {
-      throw new Error('Image is too large to upload. Try a closer crop or lower-resolution photo.');
+      const err = new Error('Image is too large to upload. Try a closer crop or lower-resolution photo.');
+      err.status = res.status;
+      err.code = 'PAYLOAD_TOO_LARGE';
+      throw err;
     }
     const code = data.code ? ` [${String(data.code)}]` : '';
     const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
     const base = data.error || data.message || `Meal save failed (${res.status})`;
-    throw new Error(`${base}${code}${details}`);
+    const err = new Error(`${base}${code}${details}`);
+    err.status = res.status;
+    if (data.code) err.code = data.code;
+    throw err;
   }
   return data;
 }
 
-export async function listMeals(userId) {
-  if (!userId) return { meals: [], configured: false };
-  const res = await fetch(
-    `${apiBase()}/api/meals?user_id=${encodeURIComponent(userId)}`
-  );
+export async function listMeals({ accessToken, userId } = {}) {
+  const headers = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const url = accessToken
+    ? `${apiBase()}/api/meals`
+    : `${apiBase()}/api/meals?user_id=${encodeURIComponent(userId || '')}`;
+
+  if (!accessToken && !userId) return { meals: [], configured: false };
+
+  const res = await fetch(url, { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const code = data.code ? ` [${String(data.code)}]` : '';
     const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
     const base = data.error || data.message || `Failed to load meals (${res.status})`;
-    throw new Error(`${base}${code}${details}`);
+    const err = new Error(`${base}${code}${details}`);
+    err.status = res.status;
+    if (data.code) err.code = data.code;
+    throw err;
   }
   return data;
 }
 
-export async function getMeal(userId, mealId) {
-  const res = await fetch(
-    `${apiBase()}/api/meals/${encodeURIComponent(mealId)}?user_id=${encodeURIComponent(userId)}`
-  );
+export async function getMeal({ accessToken, userId, mealId }) {
+  const headers = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const url = accessToken
+    ? `${apiBase()}/api/meals/${encodeURIComponent(mealId)}`
+    : `${apiBase()}/api/meals/${encodeURIComponent(mealId)}?user_id=${encodeURIComponent(userId)}`;
+
+  const res = await fetch(url, { headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const code = data.code ? ` [${String(data.code)}]` : '';
     const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
     const base = data.error || data.message || `Failed to load meal (${res.status})`;
-    throw new Error(`${base}${code}${details}`);
+    const err = new Error(`${base}${code}${details}`);
+    err.status = res.status;
+    if (data.code) err.code = data.code;
+    throw err;
   }
   return data;
 }
 
-export async function deleteMeal(userId, mealId) {
-  const res = await fetch(
-    `${apiBase()}/api/meals/${encodeURIComponent(mealId)}?user_id=${encodeURIComponent(userId)}`,
-    { method: 'DELETE' }
-  );
+export async function deleteMeal({ accessToken, userId, mealId }) {
+  const headers = {};
+  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+
+  const url = accessToken
+    ? `${apiBase()}/api/meals/${encodeURIComponent(mealId)}`
+    : `${apiBase()}/api/meals/${encodeURIComponent(mealId)}?user_id=${encodeURIComponent(userId)}`;
+
+  const res = await fetch(url, { method: 'DELETE', headers });
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
     const code = data.code ? ` [${String(data.code)}]` : '';
     const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
     const base = data.error || data.message || `Failed to delete meal (${res.status})`;
-    throw new Error(`${base}${code}${details}`);
+    const err = new Error(`${base}${code}${details}`);
+    err.status = res.status;
+    if (data.code) err.code = data.code;
+    throw err;
   }
   return data;
 }

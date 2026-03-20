@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto';
 import { analyzeFoodImage } from '../lib/geminiFoodAnalysis.js';
 import { getSupabaseAdmin, MEAL_IMAGES_BUCKET } from '../lib/supabaseServer.js';
+import { getAuthedUserId } from '../lib/authUser.js';
 
 const ALLOWED_MEAL_TYPES = new Set(['breakfast', 'lunch', 'dinner', 'snack']);
 
@@ -26,10 +27,14 @@ export default async function handler(req, res) {
   const supabase = getSupabaseAdmin();
 
   if (req.method === 'GET') {
-    const userId = typeof req.query.user_id === 'string' ? req.query.user_id.trim() : '';
-    if (!userId) {
-      return jsonError(res, 400, 'Missing user_id query parameter');
+    let userId = null;
+    try {
+      userId = await getAuthedUserId(req);
+    } catch (e) {
+      // Token present but invalid.
+      return jsonError(res, e?.status || 401, e?.message || 'Unauthorized');
     }
+    if (!userId) return jsonError(res, 401, 'Authorization token required');
     if (!supabase) {
       return res.status(200).json({ meals: [], configured: false });
     }
@@ -68,15 +73,18 @@ export default async function handler(req, res) {
 
     try {
       const body = req.body || {};
-      const userId = typeof body.user_id === 'string' ? body.user_id.trim() : '';
+      let userId = null;
+      try {
+        userId = await getAuthedUserId(req);
+      } catch (e) {
+        return jsonError(res, e?.status || 401, e?.message || 'Unauthorized');
+      }
       const image = body.image;
       const mediaType = typeof body.mediaType === 'string' ? body.mediaType : 'image/jpeg';
       const mealType = normalizeMealType(body.meal_type);
       const location = typeof body.location === 'string' ? body.location.slice(0, 500) : '';
 
-      if (!userId) {
-        return jsonError(res, 400, 'Missing user_id');
-      }
+      if (!userId) return jsonError(res, 401, 'Authorization token required');
       if (userId.length > 200) {
         return jsonError(res, 400, 'user_id too long');
       }
