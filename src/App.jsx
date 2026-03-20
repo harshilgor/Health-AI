@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { useLocalStorage } from './hooks/useLocalStorage';
 import Onboarding from './views/Onboarding';
 import Dashboard from './views/Dashboard';
@@ -6,6 +6,8 @@ import AnalysisView from './views/AnalysisView';
 import WeeklyReport from './views/WeeklyReport';
 import SymptomLog from './views/SymptomLog';
 import { analyzeMealWithGemini } from './lib/geminiClient';
+import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
+import { getOrCreateUserId } from './lib/userId';
 import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -77,34 +79,121 @@ export default function App() {
     const [profile, setProfile] = useLocalStorage('nouris_profile', null);
     const [meals, setMeals] = useLocalStorage('nouris_meals', []);
     const [symptoms, setSymptoms] = useLocalStorage('nouris_symptoms', []);
+    const [userId] = useState(() => getOrCreateUserId());
+    const [remoteMeals, setRemoteMeals] = useState([]);
+    const [mealsApiConfigured, setMealsApiConfigured] = useState(false);
     const [activeTab, setActiveTab] = useState('analyze');
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analysisImage, setAnalysisImage] = useState(null);
+    const [analysisMeta, setAnalysisMeta] = useState(null);
+    const [lastAnalyzeOpts, setLastAnalyzeOpts] = useState({ mealType: 'lunch', location: '' });
     const [isAnalyzing, setIsAnalyzing] = useState(false);
     const [error, setError] = useState(null);
+    const originalImageRef = useRef(null);
 
-    const handleAnalyze = async (base64, mediaType = "image/jpeg") => {
+    const displayMeals = useMemo(() => {
+        if (!mealsApiConfigured) return meals;
+        const byId = new Map(remoteMeals.map((m) => [String(m.id), m]));
+        for (const m of meals) {
+            const id = String(m.id);
+            if (!m.fromApi && !byId.has(id)) byId.set(id, m);
+        }
+        return Array.from(byId.values()).sort(
+            (a, b) => new Date(b.date) - new Date(a.date)
+        );
+    }, [mealsApiConfigured, remoteMeals, meals]);
+
+    useEffect(() => {
+        let cancelled = false;
+        listMeals(userId)
+            .then(({ meals: rows, configured }) => {
+                if (cancelled) return;
+                setMealsApiConfigured(!!configured);
+                setRemoteMeals((rows || []).map(apiMealToLocal));
+            })
+            .catch(() => {
+                if (cancelled) return;
+                setRemoteMeals([]);
+                setMealsApiConfigured(false);
+            });
+        return () => {
+            cancelled = true;
+        };
+    }, [userId]);
+
+    const handleAnalyze = async (base64, mediaType = 'image/jpeg', opts = {}) => {
+        const mealType = opts.mealType ?? 'lunch';
+        const location = opts.location ?? '';
+        setLastAnalyzeOpts({ mealType, location });
+        originalImageRef.current = base64;
         setIsAnalyzing(true);
         setError(null);
         setAnalysisResult(null);
+        setAnalysisMeta(null);
         setAnalysisImage(base64);
         try {
-            const result = await analyzeMealWithGemini(base64, mediaType);
-            setAnalysisResult(result);
+            try {
+                const created = await createMeal({
+                    userId,
+                    base64Image: base64,
+                    mediaType,
+                    mealType,
+                    location,
+                });
+                const localRow = apiMealToLocal({
+                    meal_id: created.meal_id,
+                    user_id: created.user_id,
+                    image_url: created.image_url,
+                    image_path: created.image_path,
+                    meal_type: created.meal_type,
+                    location: created.location,
+                    recorded_at: created.recorded_at,
+                    analysis_result: created.analysis_result || { ui: created.analysis },
+                });
+                setRemoteMeals((prev) => [
+                    localRow,
+                    ...prev.filter((x) => x.meal_id !== localRow.meal_id),
+                ]);
+                setMealsApiConfigured(true);
+                setAnalysisResult(created.analysis);
+                setAnalysisImage(created.image_url || base64);
+                setAnalysisMeta({ fromApi: true, mealId: created.meal_id });
+            } catch (e) {
+                if (e.code === 'STORAGE_NOT_CONFIGURED' || e.status === 503) {
+                    const result = await analyzeMealWithGemini(base64, mediaType);
+                    setAnalysisResult(result);
+                    setAnalysisImage(base64);
+                    setAnalysisMeta(null);
+                } else {
+                    throw e;
+                }
+            }
         } catch (err) {
             console.error(err);
-            setError(err?.message || "Something went wrong with this analysis. This sometimes happens with unclear photos or unusual dishes. Try again with a clearer image.");
+            setError(
+                err?.message ||
+                    'Something went wrong with this analysis. This sometimes happens with unclear photos or unusual dishes. Try again with a clearer image.'
+            );
             setAnalysisResult(null);
             setAnalysisImage(null);
+            setAnalysisMeta(null);
         } finally {
             setIsAnalyzing(false);
         }
     };
 
     const saveMeal = (mealData) => {
+        if (mealData.skipLocal) {
+            setAnalysisResult(null);
+            setAnalysisImage(null);
+            setAnalysisMeta(null);
+            setActiveTab('analyze');
+            return;
+        }
         setMeals([mealData, ...meals]);
         setAnalysisResult(null);
         setAnalysisImage(null);
+        setAnalysisMeta(null);
         setActiveTab('analyze');
     };
 
@@ -184,7 +273,17 @@ export default function App() {
                             <div className="flex gap-3">
                                 <button onClick={() => { setError(null); setAnalysisImage(null); }} className="btn-secondary">Dismiss</button>
                                 {analysisImage && (
-                                    <button onClick={() => handleAnalyze(analysisImage)} className="btn-primary">
+                                    <button
+                                        type="button"
+                                        onClick={() =>
+                                            handleAnalyze(
+                                                originalImageRef.current || analysisImage,
+                                                'image/jpeg',
+                                                lastAnalyzeOpts
+                                            )
+                                        }
+                                        className="btn-primary"
+                                    >
                                         Retry
                                     </button>
                                 )}
@@ -196,15 +295,26 @@ export default function App() {
                         <AnalysisView
                             data={analysisResult}
                             image={analysisImage}
+                            alreadySavedToJournal={!!analysisMeta?.fromApi}
                             onSave={saveMeal}
-                            onCancel={() => { setAnalysisResult(null); setAnalysisImage(null); }}
+                            onCancel={() => {
+                                setAnalysisResult(null);
+                                setAnalysisImage(null);
+                                setAnalysisMeta(null);
+                            }}
                         />
                     ) : (
                         <>
-                            {activeTab === 'analyze' && <Dashboard profile={profile} meals={meals} onAnalyze={handleAnalyze} />}
-                            {activeTab === 'today' && <Dashboard profile={profile} meals={meals} onAnalyze={handleAnalyze} />} {/* Shared dashboard for now */}
-                            {activeTab === 'week' && <WeeklyReport profile={profile} meals={meals} />}
-                            {activeTab === 'symptoms' && <SymptomLog profile={profile} logs={symptoms} meals={meals} onLog={saveSymptom} />}
+                            {activeTab === 'analyze' && (
+                                <Dashboard profile={profile} meals={displayMeals} onAnalyze={handleAnalyze} />
+                            )}
+                            {activeTab === 'today' && (
+                                <Dashboard profile={profile} meals={displayMeals} onAnalyze={handleAnalyze} />
+                            )}
+                            {activeTab === 'week' && <WeeklyReport profile={profile} meals={displayMeals} />}
+                            {activeTab === 'symptoms' && (
+                                <SymptomLog profile={profile} logs={symptoms} meals={displayMeals} onLog={saveSymptom} />
+                            )}
                         </>
                     )}
                 </main>

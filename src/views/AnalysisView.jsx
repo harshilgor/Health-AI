@@ -68,15 +68,40 @@ const AffectsTag = ({ affect }) => (
     </span>
 );
 
-export default function AnalysisView({ data, image, onSave, onCancel }) {
+const BulletCard = ({ title, icon, bullets = [], defaultExpanded = true }) => (
+    <CollapsibleSection title={`${icon} ${title}`} defaultExpanded={defaultExpanded}>
+        <div className="rounded-2xl border border-foreground/10 bg-card p-5 space-y-3">
+            {bullets.length ? (
+                <ul className="space-y-2">
+                    {bullets.map((b, i) => (
+                        <li key={`${title}-${i}`} className="text-sm leading-relaxed text-foreground/90">
+                            • {b}
+                        </li>
+                    ))}
+                </ul>
+            ) : (
+                <p className="text-sm text-muted">No signals detected for this category.</p>
+            )}
+        </div>
+    </CollapsibleSection>
+);
+
+export default function AnalysisView({ data, image, onSave, onCancel, alreadySavedToJournal = false }) {
     const [isLogged, setIsLogged] = useState(false);
 
     const handleSave = () => {
+        if (alreadySavedToJournal) {
+            onSave({ skipLocal: true });
+            return;
+        }
         onSave({ ...data, image, date: new Date().toISOString(), id: Date.now() });
         setIsLogged(true);
     };
 
     if (!data) return null;
+    const hasConciseSummary = !!data.quick_summary;
+    const quick = data.quick_summary || {};
+    const timeline = data.timeline_impact || {};
 
     return (
         <div className="max-w-4xl mx-auto space-y-12">
@@ -152,6 +177,55 @@ export default function AnalysisView({ data, image, onSave, onCancel }) {
                 ))}
             </div>
 
+            {hasConciseSummary && (
+                <div className="space-y-6">
+                    <h3 className="font-mono text-xs uppercase tracking-[0.3em] text-foreground border-b border-foreground/10 pb-2">
+                        Quick Health Summary
+                    </h3>
+                    <div className="grid grid-cols-1 gap-4">
+                        <BulletCard title="Heart Health" icon="❤️" bullets={quick.cardiovascular || []} />
+                        <BulletCard title="Metabolism" icon="🔥" bullets={quick.metabolic || []} />
+                        <BulletCard title="Inflammation" icon="🧬" bullets={quick.inflammatory || []} />
+                        <BulletCard title="Positives" icon="✅" bullets={quick.positives || []} />
+                    </div>
+
+                    <CollapsibleSection title="🧬 Long-term Timeline" defaultExpanded={false}>
+                        <div className="rounded-2xl border border-foreground/10 bg-card p-5 space-y-4">
+                            {[
+                                { k: '1 week', v: timeline.oneWeek },
+                                { k: '1 month', v: timeline.oneMonth },
+                                { k: '1 year', v: timeline.oneYear },
+                            ].map((item) => (
+                                <div key={item.k} className="flex gap-4 border-b border-foreground/5 pb-3 last:border-0 last:pb-0">
+                                    <span className="w-20 shrink-0 font-mono text-[10px] uppercase tracking-widest text-muted">
+                                        {item.k}
+                                    </span>
+                                    <p className="text-sm text-foreground/90">{item.v || 'No estimate available.'}</p>
+                                </div>
+                            ))}
+                        </div>
+                    </CollapsibleSection>
+
+                    <CollapsibleSection title="✅ Improvements" defaultExpanded={true}>
+                        <div className="rounded-2xl border border-foreground/10 bg-card p-5 space-y-3">
+                            {(data.improvements || []).length ? (
+                                <ul className="space-y-2">
+                                    {data.improvements.map((swap, idx) => (
+                                        <li key={`imp-${idx}`} className="text-sm text-foreground/90">
+                                            • {swap}
+                                        </li>
+                                    ))}
+                                </ul>
+                            ) : (
+                                <p className="text-sm text-muted">No improvement suggestions returned.</p>
+                            )}
+                        </div>
+                    </CollapsibleSection>
+                </div>
+            )}
+
+            {!hasConciseSummary && (
+                <>
             {/* Section A — What's In This Meal */}
             <div className="space-y-6">
                 <h3 className="font-mono text-xs uppercase tracking-[0.3em] text-foreground border-b border-foreground/10 pb-2">What's In This Meal</h3>
@@ -176,18 +250,19 @@ export default function AnalysisView({ data, image, onSave, onCancel }) {
                     <div className="space-y-4">
                         <h4 className="font-mono text-[10px] uppercase tracking-widest text-muted">Likely Hidden</h4>
                         <div className="space-y-3">
-                            {data.likely_hidden_ingredients?.map((hi, i) => {
+                            {(Array.isArray(data.likely_hidden_ingredients) ? data.likely_hidden_ingredients : []).map((hi, i) => {
+                                const rel = String(hi?.health_relevance || '');
                                 let relevanceColor = "text-foreground";
-                                if (hi.health_relevance.toLowerCase().includes("concern") || hi.health_relevance.toLowerCase().includes("spike") || hi.health_relevance.toLowerCase().includes("stress")) relevanceColor = "text-foreground font-medium";
-                                if (hi.health_relevance.toLowerCase().includes("high risk") || hi.health_relevance.toLowerCase().includes("damage")) relevanceColor = "text-foreground font-bold";
+                                if (rel.toLowerCase().includes("concern") || rel.toLowerCase().includes("spike") || rel.toLowerCase().includes("stress")) relevanceColor = "text-foreground font-medium";
+                                if (rel.toLowerCase().includes("high risk") || rel.toLowerCase().includes("damage")) relevanceColor = "text-foreground font-bold";
                                 return (
                                     <div key={i} className="p-3 bg-card border border-foreground/5 rounded-xl flex flex-col gap-1.5">
                                         <div className="flex items-center justify-between">
-                                            <span className="font-bold font-sans text-sm">{hi.ingredient}</span>
-                                            <span className="font-mono text-[8px] uppercase tracking-widest text-muted bg-foreground/5 px-1.5 py-0.5 rounded">{hi.confidence}</span>
+                                            <span className="font-bold font-sans text-sm">{hi?.ingredient}</span>
+                                            <span className="font-mono text-[8px] uppercase tracking-widest text-muted bg-foreground/5 px-1.5 py-0.5 rounded">{hi?.confidence}</span>
                                         </div>
-                                        <p className="text-[10px] text-muted font-sans leading-tight">{hi.reason_likely_present}</p>
-                                        <p className={`text-[10px] ${relevanceColor} font-mono tracking-wide leading-tight mt-1`}>Why it matters: {hi.health_relevance}</p>
+                                        <p className="text-[10px] text-muted font-sans leading-tight">{hi?.reason_likely_present}</p>
+                                        <p className={`text-[10px] ${relevanceColor} font-mono tracking-wide leading-tight mt-1`}>Why it matters: {hi?.health_relevance}</p>
                                     </div>
                                 );
                             })}
@@ -338,6 +413,8 @@ export default function AnalysisView({ data, image, onSave, onCancel }) {
                     </p>
                 </div>
             )}
+                </>
+            )}
 
             {/* Confidence Caveat Footnote */}
             {data.confidence_caveat && data.confidence_caveat.trim().length > 0 && (
@@ -356,7 +433,14 @@ export default function AnalysisView({ data, image, onSave, onCancel }) {
                 </button>
                 <div className="flex gap-4">
                     <button className="btn-secondary flex items-center gap-2 h-12 !px-4"><Share2 size={18} /></button>
-                    {!isLogged ? (
+                    {alreadySavedToJournal ? (
+                        <button
+                            onClick={handleSave}
+                            className="btn-primary flex items-center gap-3 px-12 group"
+                        >
+                            Continue <ChevronRight size={18} className="transition-transform group-hover:translate-x-1" />
+                        </button>
+                    ) : !isLogged ? (
                         <button
                             onClick={handleSave}
                             className="btn-primary flex items-center gap-3 px-12 group"

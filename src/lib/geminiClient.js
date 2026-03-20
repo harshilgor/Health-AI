@@ -1,4 +1,4 @@
-async function compressImageDataUrl(dataUrl, maxDimension = 1280, quality = 0.72) {
+export async function compressImageDataUrl(dataUrl, maxDimension = 1280, quality = 0.72) {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.onload = () => {

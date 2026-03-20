@@ -1,4 +1,4 @@
-import React, { useMemo, useCallback } from 'react';
+import React, { useMemo, useCallback, useState } from 'react';
 import { useDropzone } from 'react-dropzone';
 import { motion } from 'framer-motion';
 import { Camera } from 'lucide-react';
@@ -51,9 +51,21 @@ const ProgressRing = ({ value, max, label, color = "#FFFFFF", size = 120, thickn
     );
 };
 
+const MEAL_TYPES = [
+    { value: 'breakfast', label: 'Breakfast' },
+    { value: 'lunch', label: 'Lunch' },
+    { value: 'dinner', label: 'Dinner' },
+    { value: 'snack', label: 'Snack' },
+];
+
 export default function Dashboard({ profile, meals = [], onAnalyze }) {
+    const [mealType, setMealType] = useState('lunch');
+    const [location, setLocation] = useState('');
     const today = new Date().toISOString().split('T')[0];
-    const todaysMeals = useMemo(() => meals.filter(m => m.date.startsWith(today)), [meals, today]);
+    const todaysMeals = useMemo(
+        () => meals.filter((m) => (m.date || '').startsWith(today)),
+        [meals, today]
+    );
 
     const totals = useMemo(() => todaysMeals.reduce((acc, m) => ({
         calories: acc.calories + m.nutrition.calories,
@@ -66,10 +78,10 @@ export default function Dashboard({ profile, meals = [], onAnalyze }) {
         if (!file) return;
         const reader = new FileReader();
         reader.onload = () => {
-            onAnalyze(reader.result, file.type);
+            onAnalyze(reader.result, file.type, { mealType, location: location.trim() });
         };
         reader.readAsDataURL(file);
-    }, [onAnalyze]);
+    }, [onAnalyze, mealType, location]);
 
     const { getRootProps, getInputProps, isDragActive } = useDropzone({
         onDrop,
@@ -84,6 +96,31 @@ export default function Dashboard({ profile, meals = [], onAnalyze }) {
             <div className="space-y-1">
                 <h1 className="text-3xl md:text-4xl font-semibold tracking-tight">Today</h1>
                 <p className="text-muted text-sm">{new Date().toLocaleDateString(undefined, { month: 'long', day: 'numeric' })}</p>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                    <label className="text-xs font-mono uppercase tracking-widest text-muted">Meal type</label>
+                    <select
+                        value={mealType}
+                        onChange={(e) => setMealType(e.target.value)}
+                        className="w-full rounded-xl border border-foreground/10 bg-card px-4 py-3 text-sm text-foreground focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    >
+                        {MEAL_TYPES.map((t) => (
+                            <option key={t.value} value={t.value}>{t.label}</option>
+                        ))}
+                    </select>
+                </div>
+                <div className="space-y-2">
+                    <label className="text-xs font-mono uppercase tracking-widest text-muted">Location (optional)</label>
+                    <input
+                        type="text"
+                        value={location}
+                        onChange={(e) => setLocation(e.target.value)}
+                        placeholder="Home, café, office…"
+                        className="w-full rounded-xl border border-foreground/10 bg-card px-4 py-3 text-sm text-foreground placeholder:text-muted focus:outline-none focus:ring-2 focus:ring-foreground/20"
+                    />
+                </div>
             </div>
 
             <div

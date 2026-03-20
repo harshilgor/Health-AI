@@ -5,6 +5,15 @@
   "functions": {
     "api/logmeal/analyze.js": {
       "maxDuration": 30
+    },
+    "api/meals/index.js": {
+      "maxDuration": 60
+    },
+    "api/meals/[id].js": {
+      "maxDuration": 30
+    },
+    "api/gemini/analyze.js": {
+      "maxDuration": 60
     }
   }
 }
