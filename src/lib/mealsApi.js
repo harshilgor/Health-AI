@@ -49,8 +49,10 @@ export async function createMeal({
     if (res.status === 413) {
       throw new Error('Image is too large to upload. Try a closer crop or lower-resolution photo.');
     }
-    const details = data.details ? ` (${String(data.details).slice(0, 220)})` : '';
-    throw new Error(data.error || data.message || `Meal save failed (${res.status})${details}`);
+    const code = data.code ? ` [${String(data.code)}]` : '';
+    const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
+    const base = data.error || data.message || `Meal save failed (${res.status})`;
+    throw new Error(`${base}${code}${details}`);
   }
   return data;
 }
@@ -62,7 +64,10 @@ export async function listMeals(userId) {
   );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Failed to load meals (${res.status})`);
+    const code = data.code ? ` [${String(data.code)}]` : '';
+    const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
+    const base = data.error || data.message || `Failed to load meals (${res.status})`;
+    throw new Error(`${base}${code}${details}`);
   }
   return data;
 }
@@ -73,7 +78,10 @@ export async function getMeal(userId, mealId) {
   );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Failed to load meal (${res.status})`);
+    const code = data.code ? ` [${String(data.code)}]` : '';
+    const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
+    const base = data.error || data.message || `Failed to load meal (${res.status})`;
+    throw new Error(`${base}${code}${details}`);
   }
   return data;
 }
@@ -85,7 +93,10 @@ export async function deleteMeal(userId, mealId) {
   );
   const data = await res.json().catch(() => ({}));
   if (!res.ok) {
-    throw new Error(data.error || `Failed to delete meal (${res.status})`);
+    const code = data.code ? ` [${String(data.code)}]` : '';
+    const details = data.details ? `: ${String(data.details).slice(0, 260)}` : '';
+    const base = data.error || data.message || `Failed to delete meal (${res.status})`;
+    throw new Error(`${base}${code}${details}`);
   }
   return data;
 }
