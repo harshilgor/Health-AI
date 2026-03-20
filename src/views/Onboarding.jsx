@@ -6,7 +6,7 @@ export default function Onboarding({ onComplete, canSkipApiKey = false }) {
     const [step, setStep] = useState(0);
     const [profile, setProfile] = useState({
         api_key: import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY || '',
-        goal: 'Eater healthier generally',
+        goal: 'Eat healthier generally',
         conditions: 'None',
         age: 30,
         sex: 'male',

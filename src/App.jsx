@@ -21,7 +21,7 @@ import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import MarketingLanding from './views/MarketingLanding';
 import { getAuthRedirectUrl } from './lib/authRedirect';
-import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User, Sprout, BarChart3, Target } from 'lucide-react';
+import { Camera, Calendar, Activity, Loader2, Sparkles, X, LogOut, User, Sprout, BarChart3, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PulseBackground = () => (
@@ -97,7 +97,7 @@ export default function App() {
     const [mealsApiConfigured, setMealsApiConfigured] = useState(false);
     const [session, setSession] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
-    const [userDataLoading, setUserDataLoading] = useState(false);
+    const [userDataLoading, setUserDataLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('garden');
     const [garden, setGarden] = useState(null);
     const [gardenEnvironment, setGardenEnvironment] = useState('partly');
@@ -323,17 +323,18 @@ export default function App() {
     }, [session, profile, envApiKey]);
 
     useEffect(() => {
-        if (!session) return;
+        if (!session) {
+            setUserDataLoading(false);
+            return;
+        }
 
         const token = session?.access_token;
-        if (!token) return;
+        if (!token) {
+            setUserDataLoading(false);
+            return;
+        }
 
         setUserDataLoading(true);
-
-        // Clear local cache while we load the authed user's persisted data.
-        setMeals([]);
-        setSymptoms([]);
-        setProfile(null);
 
         const load = async () => {
             try {
@@ -343,26 +344,27 @@ export default function App() {
                 ]);
 
                 if (savedProfile) {
-                    // api_key is client-only (weekly AI); not stored in Supabase. Prefer env, not stale closure.
                     setProfile({
                         ...savedProfile,
                         api_key: envApiKey || '',
                     });
+                } else {
+                    setProfile(null);
                 }
 
+                setMeals([]);
                 if (Array.isArray(savedSymptoms)) {
                     setSymptoms(
                         savedSymptoms.map((s) => ({
                             ...s,
-                            // Preserve the UI's expected shape.
                             date: s.date,
                         }))
                     );
+                } else {
+                    setSymptoms([]);
                 }
             } catch (e) {
                 console.error('Failed to load authed user data:', e);
-                setProfile(null);
-                setSymptoms([]);
             } finally {
                 setUserDataLoading(false);
             }
@@ -515,7 +517,6 @@ export default function App() {
                         <NavItem id="garden" active={activeTab === 'garden'} label="Garden" icon={Sprout} onClick={setActiveTab} />
                         <NavItem id="insights" active={activeTab === 'insights'} label="Insights" icon={BarChart3} onClick={setActiveTab} />
                         <NavItem id="analyze" active={activeTab === 'analyze'} label="Analyze" icon={Camera} onClick={setActiveTab} />
-                        <NavItem id="today" active={activeTab === 'today'} label="Today" icon={LayoutDashboard} onClick={setActiveTab} />
                         <NavItem id="week" active={activeTab === 'week'} label="Week" icon={Calendar} onClick={setActiveTab} />
                         <NavItem id="symptoms" active={activeTab === 'symptoms'} label="Symptoms" icon={Activity} onClick={setActiveTab} />
                         <NavItem id="plans" active={activeTab === 'plans'} label="Plans" icon={Target} onClick={setActiveTab} />
@@ -636,9 +637,6 @@ export default function App() {
                             {activeTab === 'analyze' && (
                                 <Dashboard profile={profile} meals={displayMeals} onAnalyze={handleAnalyze} />
                             )}
-                            {activeTab === 'today' && (
-                                <Dashboard profile={profile} meals={displayMeals} onAnalyze={handleAnalyze} />
-                            )}
                             {activeTab === 'week' && <WeeklyReport profile={profile} meals={displayMeals} />}
                             {activeTab === 'symptoms' && (
                                 <SymptomLog profile={profile} logs={symptoms} meals={displayMeals} onLog={saveSymptom} />
@@ -692,43 +690,24 @@ export default function App() {
                     )}
                 </main>
 
-                {/* Mobile Nav - minimal pill bar */}
-                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-t border-foreground/[0.06] flex items-center justify-around px-1 z-40 safe-area-pb">
+                {/* Mobile Nav */}
+                <nav className="md:hidden fixed bottom-0 left-0 right-0 h-16 bg-card/95 backdrop-blur-md border-t border-foreground/[0.06] flex items-center justify-around px-2 z-40 safe-area-pb">
                     <button onClick={() => setActiveTab('garden')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'garden' ? 'text-foreground' : 'text-muted'}`}>
                         <Sprout size={20} strokeWidth={1.5} />
-                        <span className="text-[9px] font-medium truncate max-w-full">Garden</span>
+                        <span className="text-[10px] font-medium">Garden</span>
                     </button>
                     <button onClick={() => setActiveTab('insights')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'insights' ? 'text-foreground' : 'text-muted'}`}>
                         <BarChart3 size={20} strokeWidth={1.5} />
-                        <span className="text-[9px] font-medium truncate max-w-full">Stats</span>
+                        <span className="text-[10px] font-medium">Stats</span>
                     </button>
                     <button onClick={() => setActiveTab('analyze')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'analyze' ? 'text-foreground' : 'text-muted'}`}>
                         <Camera size={22} strokeWidth={1.5} />
-                        <span className="text-[9px] font-medium truncate max-w-full">Scan</span>
-                    </button>
-                    <button onClick={() => setActiveTab('today')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'today' ? 'text-foreground' : 'text-muted'}`}>
-                        <LayoutDashboard size={20} strokeWidth={1.5} />
-                        <span className="text-[9px] font-medium truncate max-w-full">Today</span>
+                        <span className="text-[10px] font-medium">Scan</span>
                     </button>
                     <button onClick={() => setActiveTab('plans')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'plans' ? 'text-foreground' : 'text-muted'}`}>
                         <Target size={20} strokeWidth={1.5} />
-                        <span className="text-[9px] font-medium truncate max-w-full">Plans</span>
+                        <span className="text-[10px] font-medium">Plans</span>
                     </button>
-                    {supabase && (
-                        <button
-                            onClick={() => (session ? handleSignOut() : handleGoogleSignIn())}
-                            className="flex flex-col items-center gap-0.5 py-2 text-muted hover:text-foreground"
-                        >
-                            {session ? (
-                                <LogOut size={22} strokeWidth={1.5} />
-                            ) : (
-                                <LogIn size={22} strokeWidth={1.5} />
-                            )}
-                            <span className="text-[10px] font-medium">
-                                {session ? 'Sign out' : 'Account'}
-                            </span>
-                        </button>
-                    )}
                 </nav>
             </div>
         </div>
