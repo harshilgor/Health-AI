@@ -11,7 +11,7 @@ import { getOrCreateUserId } from './lib/userId';
 import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
-import AuthLanding from './views/AuthLanding';
+import MarketingLanding from './views/MarketingLanding';
 import { getAuthRedirectUrl } from './lib/authRedirect';
 import { Camera, LayoutDashboard, Calendar, Activity, Loader2, Sparkles, X, LogIn, LogOut, User } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -364,12 +364,7 @@ export default function App() {
     }
 
     if (!session) {
-        return (
-            <>
-                <PulseBackground />
-                <AuthLanding supabase={supabase} supabaseConfigured={supabaseConfigured} />
-            </>
-        );
+        return <MarketingLanding supabase={supabase} supabaseConfigured={supabaseConfigured} />;
     }
 
     if (session && userDataLoading) {
