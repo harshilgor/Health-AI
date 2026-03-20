@@ -1,4 +1,4 @@
-import { buildPackagedAnalysis } from '../../../src/lib/packaged.js';
+import { buildPackagedAnalysis } from '../../src/lib/packaged.js';
 
 const VISION_ENDPOINT = 'https://vision.googleapis.com/v1/images:annotate';
 

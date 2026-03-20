@@ -7,7 +7,8 @@
     "dev:full": "vercel dev",
     "build": "vite build",
     "preview": "vite preview",
-    "test:gemini": "node test-gemini.js"
+    "test:gemini": "node test-gemini.js",
+    "check:api-fn-budget": "node scripts/check-api-fn-budget.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.99.3",

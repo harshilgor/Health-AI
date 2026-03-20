@@ -1,11 +1,11 @@
-import { handleGeminiAnalyze } from './lib/handlers/geminiAnalyze.js';
-import { handleDebugSupabase } from './lib/handlers/debugSupabase.js';
-import { handleLogmealAnalyze } from './lib/handlers/logmealAnalyze.js';
-import { handlePackagedAnalyze } from './lib/handlers/packagedAnalyze.js';
-import { handleProfile } from './lib/handlers/profile.js';
-import { handleGarden } from './lib/handlers/garden.js';
-import { handleSymptoms } from './lib/handlers/symptoms.js';
-import { handleMeals } from './lib/handlers/meals.js';
+import { handleGeminiAnalyze } from '../server-lib/handlers/geminiAnalyze.js';
+import { handleDebugSupabase } from '../server-lib/handlers/debugSupabase.js';
+import { handleLogmealAnalyze } from '../server-lib/handlers/logmealAnalyze.js';
+import { handlePackagedAnalyze } from '../server-lib/handlers/packagedAnalyze.js';
+import { handleProfile } from '../server-lib/handlers/profile.js';
+import { handleGarden } from '../server-lib/handlers/garden.js';
+import { handleSymptoms } from '../server-lib/handlers/symptoms.js';
+import { handleMeals } from '../server-lib/handlers/meals.js';
 
 function normalizeSlug(slug) {
   if (slug == null) return [];
