@@ -19,7 +19,7 @@ function scrollToId(id) {
   document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-export default function MarketingLanding({ supabase, supabaseConfigured }) {
+export default function MarketingLanding({ supabase, supabaseConfigured, onContinueWithoutAuth }) {
   const canAuth = !!supabase && supabaseConfigured;
   const [scrolled, setScrolled] = useState(false);
   const [openFaq, setOpenFaq] = useState(0);
@@ -31,7 +31,10 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
   }, []);
 
   const signInGoogle = (promptSelect) => {
-    if (!canAuth) return;
+    if (!canAuth) {
+      onContinueWithoutAuth?.();
+      return;
+    }
     return supabase.auth.signInWithOAuth({
       provider: 'google',
       options: {
@@ -129,16 +132,14 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
             <button
               type="button"
               onClick={() => signInGoogle(true)}
-              disabled={!canAuth}
-              className="hidden rounded-xl border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50 sm:inline-flex disabled:cursor-not-allowed disabled:opacity-50"
+              className="hidden rounded-xl border border-neutral-300 px-4 py-2 text-sm font-medium text-neutral-800 transition-colors hover:border-neutral-400 hover:bg-neutral-50 sm:inline-flex"
             >
               Log in
             </button>
             <button
               type="button"
               onClick={() => signInGoogle(false)}
-              disabled={!canAuth}
-              className="inline-flex items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-50"
+              className="inline-flex items-center rounded-xl bg-neutral-900 px-4 py-2 text-sm font-medium text-white transition-opacity hover:opacity-90"
             >
               Get started
             </button>
@@ -148,8 +149,9 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
 
       {!canAuth && (
         <div className="border-b border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-950">
-          Sign-in will be available after you set <code className="rounded bg-amber-100 px-1">VITE_SUPABASE_URL</code> and{' '}
-          <code className="rounded bg-amber-100 px-1">VITE_SUPABASE_ANON_KEY</code> in your deployment environment.
+          Google sign-in needs <code className="rounded bg-amber-100 px-1">VITE_SUPABASE_URL</code> and{' '}
+          <code className="rounded bg-amber-100 px-1">VITE_SUPABASE_ANON_KEY</code>. You can still get started locally
+          without an account.
         </div>
       )}
 
@@ -172,18 +174,16 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
               <button
                 type="button"
                 onClick={() => signInGoogle(false)}
-                disabled={!canAuth}
-                className="btn-primary inline-flex h-12 items-center justify-center px-8 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-primary inline-flex h-12 items-center justify-center px-8"
               >
-                Sign up with Google
+                {canAuth ? 'Sign up with Google' : 'Get started'}
               </button>
               <button
                 type="button"
                 onClick={() => signInGoogle(true)}
-                disabled={!canAuth}
-                className="btn-secondary inline-flex h-12 items-center justify-center px-8 disabled:cursor-not-allowed disabled:opacity-50"
+                className="btn-secondary inline-flex h-12 items-center justify-center px-8"
               >
-                Log in with Google
+                {canAuth ? 'Log in with Google' : 'Continue without account'}
               </button>
             </div>
             <p className="mt-4 text-sm text-neutral-500">
@@ -341,18 +341,16 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
             <button
               type="button"
               onClick={() => signInGoogle(false)}
-              disabled={!canAuth}
-              className="btn-primary inline-flex h-12 items-center justify-center px-8 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-primary inline-flex h-12 items-center justify-center px-8"
             >
-              Sign up with Google
+              {canAuth ? 'Sign up with Google' : 'Get started'}
             </button>
             <button
               type="button"
               onClick={() => signInGoogle(true)}
-              disabled={!canAuth}
-              className="btn-secondary inline-flex h-12 items-center justify-center px-8 disabled:cursor-not-allowed disabled:opacity-50"
+              className="btn-secondary inline-flex h-12 items-center justify-center px-8"
             >
-              Log in with Google
+              {canAuth ? 'Log in with Google' : 'Continue without account'}
             </button>
           </div>
         </div>
@@ -373,7 +371,6 @@ export default function MarketingLanding({ supabase, supabaseConfigured }) {
               type="button"
               className="hover:text-neutral-900"
               onClick={() => signInGoogle(true)}
-              disabled={!canAuth}
             >
               Log in
             </button>

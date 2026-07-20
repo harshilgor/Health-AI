@@ -97,6 +97,7 @@ export default function App() {
     const [mealsApiConfigured, setMealsApiConfigured] = useState(false);
     const [session, setSession] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
+    const [guestStarted, setGuestStarted] = useState(false);
     const [userDataLoading, setUserDataLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('garden');
     const [garden, setGarden] = useState(null);
@@ -447,8 +448,14 @@ export default function App() {
         return <PulseBackground />;
     }
 
-    if (!session) {
-        return <MarketingLanding supabase={supabase} supabaseConfigured={supabaseConfigured} />;
+    if (!session && !guestStarted) {
+        return (
+            <MarketingLanding
+                supabase={supabase}
+                supabaseConfigured={supabaseConfigured}
+                onContinueWithoutAuth={() => setGuestStarted(true)}
+            />
+        );
     }
 
     if (session && userDataLoading) {
@@ -456,35 +463,11 @@ export default function App() {
     }
 
     if (!profile) {
-        if (!session && envApiKey) return <PulseBackground />;
         return (
             <>
                 <PulseBackground />
                 <Onboarding
-                    canSkipApiKey={!!session}
-                    onComplete={async (p) => {
-                        setProfile(p);
-                        if (session) {
-                            const token = session?.access_token;
-                            try {
-                                await saveProfile(token, p);
-                            } catch (e) {
-                                console.error('Failed to save profile:', e);
-                            }
-                        }
-                    }}
-                />
-            </>
-        );
-    }
-
-    // Signed-in users use backend Gemini for meals; Anthropic key is optional (weekly report only).
-    if (!session && !profile.api_key && !envApiKey) {
-        return (
-            <>
-                <PulseBackground />
-                <Onboarding
-                    canSkipApiKey={false}
+                    canSkipApiKey={!!session || guestStarted}
                     onComplete={async (p) => {
                         setProfile(p);
                         if (session) {

@@ -4,7 +4,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "dev:full": "vercel dev",
+    "dev:api": "node scripts/dev-api.mjs",
+    "dev:full": "node scripts/dev.mjs",
+    "dev:vercel": "npx vercel dev",
     "build": "vite build",
     "preview": "vite preview",
     "test:gemini": "node test-gemini.js",
