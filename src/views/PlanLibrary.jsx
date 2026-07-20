@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
-import { ChevronRight, Users, Loader2, Dumbbell, Dna, Brain, Heart } from 'lucide-react';
+import { ChevronRight, Users, Loader2, Dumbbell, Dna, Brain, Heart, Sparkles, Wand2 } from 'lucide-react';
+import { generateCustomPlan } from '../lib/plansApi';
 
 const CATEGORY_META = {
   physique: { label: 'Physique Goals', icon: Dumbbell, emoji: '💪' },
@@ -90,8 +91,12 @@ function PlanCard({ plan, onSelect }) {
   );
 }
 
-export default function PlanLibrary({ plans, loading, onSelectPlan, activePlan, onGoToActive }) {
+export default function PlanLibrary({ plans, loading, onSelectPlan, activePlan, onGoToActive, profile, onPlanGenerated }) {
   const [expandedCat, setExpandedCat] = useState(null);
+  const [preferences, setPreferences] = useState('');
+  const [generating, setGenerating] = useState(false);
+  const [generateError, setGenerateError] = useState(null);
+  const [generatedPlan, setGeneratedPlan] = useState(null);
 
   const grouped = {};
   for (const p of plans || []) {
@@ -116,14 +121,77 @@ export default function PlanLibrary({ plans, loading, onSelectPlan, activePlan, 
     );
   }
 
+  const handleGenerate = async () => {
+    if (!preferences.trim()) {
+      setGenerateError('Describe your goals or dietary preferences first.');
+      return;
+    }
+    setGenerating(true);
+    setGenerateError(null);
+    try {
+      const plan = await generateCustomPlan(profile, preferences.trim());
+      setGeneratedPlan(plan);
+      onPlanGenerated?.(plan);
+      if (plan.slug) onSelectPlan(plan.slug);
+    } catch (e) {
+      setGenerateError(e.message || 'Failed to generate plan');
+    } finally {
+      setGenerating(false);
+    }
+  };
+
   return (
     <div className="max-w-2xl mx-auto space-y-6 pb-24 md:pb-8">
       <div>
         <p className="font-mono text-xs uppercase tracking-[0.2em] text-muted">Follow the Greats</p>
         <h1 className="text-2xl md:text-3xl font-semibold tracking-tight mt-1">Nutrition Plans</h1>
         <p className="text-sm text-muted mt-2 max-w-md">
-          Choose a plan inspired by elite performers. Get daily meal guidance, macro targets, and track your transformation.
+          Choose a curated plan or let AI build one tailored to your goals, restrictions, and lifestyle.
         </p>
+      </div>
+
+      <div className="rounded-2xl border border-accent/20 bg-accent/5 p-5 space-y-4">
+        <div className="flex items-center gap-2 text-sm font-semibold">
+          <Sparkles size={16} className="text-accent" />
+          Generate a custom plan with AI
+        </div>
+        <textarea
+          value={preferences}
+          onChange={(e) => setPreferences(e.target.value)}
+          rows={3}
+          placeholder="e.g. I want to lose 5kg, vegetarian, no dairy, busy schedule, prefer 3 meals a day..."
+          className="w-full rounded-xl border border-foreground/10 bg-card px-4 py-3 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-accent/30"
+        />
+        {generateError && <p className="text-xs text-rose-600">{generateError}</p>}
+        <button
+          type="button"
+          onClick={handleGenerate}
+          disabled={generating}
+          className="btn-primary w-full flex items-center justify-center gap-2 disabled:opacity-60"
+        >
+          {generating ? (
+            <>
+              <Loader2 size={16} className="animate-spin" /> Generating your plan...
+            </>
+          ) : (
+            <>
+              <Wand2 size={16} /> Generate my plan
+            </>
+          )}
+        </button>
+        {generatedPlan && (
+          <div className="rounded-xl border border-foreground/10 bg-card p-4 text-sm space-y-1">
+            <p className="font-semibold">{generatedPlan.name}</p>
+            <p className="text-muted">{generatedPlan.tagline}</p>
+            <button
+              type="button"
+              onClick={() => onSelectPlan(generatedPlan.slug)}
+              className="text-xs text-accent font-medium mt-2 hover:underline"
+            >
+              View full plan →
+            </button>
+          </div>
+        )}
       </div>
 
       {activePlan && (

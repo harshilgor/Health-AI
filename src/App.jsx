@@ -11,11 +11,9 @@ import PlanLibrary from './views/PlanLibrary';
 import PlanDetail from './views/PlanDetail';
 import ActivePlanDashboard from './views/ActivePlanDashboard';
 import PlanProgressReport from './views/PlanProgressReport';
-import { analyzeMealWithGemini } from './lib/geminiClient';
 import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
 import { fetchGarden } from './lib/gardenApi';
 import { listPlans as fetchPlans, getActivePlan, quitPlan, completeMealForPlan } from './lib/plansApi';
-import { getOrCreateUserId } from './lib/userId';
 import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
@@ -92,12 +90,10 @@ export default function App() {
     const [profile, setProfile] = useLocalStorage('nouris_profile', null);
     const [meals, setMeals] = useLocalStorage('nouris_meals', []);
     const [symptoms, setSymptoms] = useLocalStorage('nouris_symptoms', []);
-    const [anonUserId] = useState(() => getOrCreateUserId());
     const [remoteMeals, setRemoteMeals] = useState([]);
     const [mealsApiConfigured, setMealsApiConfigured] = useState(false);
     const [session, setSession] = useState(null);
     const [authLoading, setAuthLoading] = useState(true);
-    const [guestStarted, setGuestStarted] = useState(false);
     const [userDataLoading, setUserDataLoading] = useState(true);
     const [activeTab, setActiveTab] = useState('garden');
     const [garden, setGarden] = useState(null);
@@ -109,6 +105,7 @@ export default function App() {
     const [activePlanData, setActivePlanData] = useState(null);
     const [plansSubView, setPlansSubView] = useState('library');
     const [selectedPlanSlug, setSelectedPlanSlug] = useState(null);
+    const [aiPlansBySlug, setAiPlansBySlug] = useState({});
     const [analysisResult, setAnalysisResult] = useState(null);
     const [analysisImage, setAnalysisImage] = useState(null);
     const [analysisMeta, setAnalysisMeta] = useState(null);
@@ -134,16 +131,9 @@ export default function App() {
     };
 
     const displayMeals = useMemo(() => {
-        if (!mealsApiConfigured) return meals;
-        const byId = new Map(remoteMeals.map((m) => [String(m.id), m]));
-        for (const m of meals) {
-            const id = String(m.id);
-            if (!m.fromApi && !byId.has(id)) byId.set(id, m);
-        }
-        return Array.from(byId.values()).sort(
-            (a, b) => new Date(b.date) - new Date(a.date)
-        );
-    }, [mealsApiConfigured, remoteMeals, meals]);
+        if (!session?.access_token) return [];
+        return [...remoteMeals].sort((a, b) => new Date(b.date) - new Date(a.date));
+    }, [session?.access_token, remoteMeals]);
 
     useEffect(() => {
         if (!supabase) {
@@ -181,13 +171,7 @@ export default function App() {
             return;
         }
 
-        // Clear local state when switching to an authed user.
-        if (session) {
-            setMeals([]);
-            setSymptoms([]);
-        }
-
-        listMeals({ accessToken: session?.access_token, userId: anonUserId })
+        listMeals({ accessToken: session.access_token })
             .then(({ meals: rows, configured }) => {
                 if (cancelled) return;
                 setMealsApiConfigured(!!configured);
@@ -202,7 +186,7 @@ export default function App() {
         return () => {
             cancelled = true;
         };
-    }, [authLoading, session, anonUserId, setMeals, setSymptoms]);
+    }, [authLoading, session]);
 
     const handleAnalyze = async (base64, mediaType = 'image/jpeg', opts = {}) => {
         const mealType = opts.mealType ?? 'lunch';
@@ -214,11 +198,10 @@ export default function App() {
         setAnalysisResult(null);
         setAnalysisMeta(null);
         setAnalysisImage(base64);
+
         try {
-            try {
                 const created = await createMeal({
-                    accessToken: session?.access_token,
-                    userId: anonUserId,
+                    accessToken: session.access_token,
                     base64Image: base64,
                     mediaType,
                     mealType,
@@ -232,26 +215,9 @@ export default function App() {
                 setMealsApiConfigured(true);
                 setAnalysisResult(created.analysis);
                 setAnalysisImage(created.image_url || base64);
-                setAnalysisMeta({ fromApi: true, mealId: created.meal_id });
+                setAnalysisMeta({ fromApi: true, mealId: created.meal_id, savedToJournal: true });
                 setLastGardenUpdate(created.garden_update || null);
                 loadGarden();
-            } catch (e) {
-                if (
-                    e.code === 'STORAGE_NOT_CONFIGURED' ||
-                    e.status === 503 ||
-                    e.status === 401 ||
-                    e.status === 403 ||
-                    e.status === 404
-                ) {
-                    const result = await analyzeMealWithGemini(base64, mediaType);
-                    setAnalysisResult(result);
-                    setAnalysisImage(base64);
-                    setAnalysisMeta(null);
-                    setLastGardenUpdate(null);
-                } else {
-                    throw e;
-                }
-            }
         } catch (err) {
             console.error(err);
             setError(
@@ -267,29 +233,15 @@ export default function App() {
         }
     };
 
-    const saveMeal = (mealData) => {
-        if (mealData.skipLocal) {
-            setAnalysisResult(null);
-            setAnalysisImage(null);
-            setAnalysisMeta(null);
-            setLastGardenUpdate(null);
-            setActiveTab('garden');
-            return;
-        }
-        setMeals([mealData, ...meals]);
+    const saveMeal = () => {
         setAnalysisResult(null);
         setAnalysisImage(null);
         setAnalysisMeta(null);
         setLastGardenUpdate(null);
-        setActiveTab('analyze');
+        setActiveTab('week');
     };
 
     const saveSymptom = (symptomData) => {
-        if (!session) {
-            setSymptoms([symptomData, ...symptoms]);
-            return;
-        }
-
         const token = session?.access_token;
         if (!token) return;
 
@@ -303,29 +255,11 @@ export default function App() {
 
     const envApiKey = import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
 
-    useEffect(() => {
-        if (session) return;
-        if (!profile && envApiKey) {
-            const defaultProfile = {
-                api_key: envApiKey,
-                goal: 'Eat healthier generally',
-                conditions: 'None',
-                age: 30,
-                sex: 'male',
-                activity: 'Lightly active',
-                daily_calories: 2000,
-                protein_target: 125,
-                fat_target: 67,
-                carb_target: 225,
-                fiber_target: 30,
-                joined: new Date().toISOString()
-            };
-            setProfile(defaultProfile);
-        }
-    }, [session, profile, envApiKey]);
+    // Auto-fill default profile for authenticated users that haven't onboarded yet
+    // (no longer needed for guest mode since auth is required).
 
     useEffect(() => {
-        if (!session) {
+        if (!session?.access_token) {
             setUserDataLoading(false);
             return;
         }
@@ -354,7 +288,6 @@ export default function App() {
                     setProfile(null);
                 }
 
-                setMeals([]);
                 if (Array.isArray(savedSymptoms)) {
                     setSymptoms(
                         savedSymptoms.map((s) => ({
@@ -449,12 +382,11 @@ export default function App() {
         return <PulseBackground />;
     }
 
-    if (!session && !guestStarted) {
+    if (!session) {
         return (
             <MarketingLanding
                 supabase={supabase}
                 supabaseConfigured={supabaseConfigured}
-                onContinueWithoutAuth={() => setGuestStarted(true)}
             />
         );
     }
@@ -468,7 +400,7 @@ export default function App() {
             <>
                 <PulseBackground />
                 <Onboarding
-                    canSkipApiKey={!!session || guestStarted}
+                    canSkipApiKey={true}
                     onComplete={async (p) => {
                         setProfile(p);
                         if (session) {
@@ -575,7 +507,7 @@ export default function App() {
                         <AnalysisView
                             data={analysisResult}
                             image={analysisImage}
-                            alreadySavedToJournal={!!analysisMeta?.fromApi}
+                            alreadySavedToJournal={!!analysisMeta?.fromApi || !!analysisMeta?.savedToJournal}
                             gardenUpdate={lastGardenUpdate}
                             onViewGarden={() => {
                                 setLastGardenUpdate(null);
@@ -621,7 +553,13 @@ export default function App() {
                             {activeTab === 'analyze' && (
                                 <Dashboard profile={profile} meals={displayMeals} onAnalyze={handleAnalyze} />
                             )}
-                            {activeTab === 'week' && <WeeklyReport profile={profile} meals={displayMeals} />}
+                            {activeTab === 'week' && (
+                                <WeeklyReport
+                                    profile={profile}
+                                    meals={displayMeals}
+                                    onLogMeal={() => setActiveTab('analyze')}
+                                />
+                            )}
                             {activeTab === 'symptoms' && (
                                 <SymptomLog profile={profile} logs={symptoms} meals={displayMeals} onLog={saveSymptom} />
                             )}
@@ -653,6 +591,7 @@ export default function App() {
                                     <PlanDetail
                                         slug={selectedPlanSlug}
                                         token={session?.access_token}
+                                        initialPlan={aiPlansBySlug[selectedPlanSlug]}
                                         onBack={() => { setPlansSubView('library'); setSelectedPlanSlug(null); }}
                                         onEnrolled={() => {
                                             loadActivePlan();
@@ -664,7 +603,12 @@ export default function App() {
                                     <PlanLibrary
                                         plans={allPlans}
                                         loading={plansLoading}
+                                        profile={profile}
                                         onSelectPlan={(slug) => { setSelectedPlanSlug(slug); setPlansSubView('detail'); }}
+                                        onPlanGenerated={(plan) => {
+                                            setAiPlansBySlug((prev) => ({ ...prev, [plan.slug]: plan }));
+                                            setAllPlans((prev) => [plan, ...prev.filter((p) => p.slug !== plan.slug)]);
+                                        }}
                                         activePlan={activePlanData}
                                         onGoToActive={() => setPlansSubView('active')}
                                     />

@@ -16,19 +16,22 @@ function ensureDataUrl(input, mediaType) {
  */
 export async function createMeal({
   accessToken,
-  userId,
   base64Image,
   mediaType = 'image/jpeg',
   mealType = 'lunch',
   location = '',
 }) {
+  if (!accessToken) throw new Error('Authentication required');
+
   const normalized = ensureDataUrl(base64Image, mediaType);
   // More aggressive compression for Vercel JSON body limits.
   const compressedDataUrl = await compressImageDataUrl(normalized, 960, 0.65);
   const payloadMediaType = 'image/jpeg';
 
-  const headers = { 'Content-Type': 'application/json' };
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+  const headers = {
+    'Content-Type': 'application/json',
+    Authorization: `Bearer ${accessToken}`,
+  };
 
   const body = {
     image: compressedDataUrl,
@@ -36,7 +39,6 @@ export async function createMeal({
     meal_type: mealType,
     location: location || '',
   };
-  if (!accessToken && userId) body.user_id = userId;
 
   const res = await fetch(`${apiBase()}/api/meals`, {
     method: 'POST',
@@ -69,15 +71,11 @@ export async function createMeal({
   return data;
 }
 
-export async function listMeals({ accessToken, userId } = {}) {
-  const headers = {};
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+export async function listMeals({ accessToken } = {}) {
+  if (!accessToken) return { meals: [], configured: false };
 
-  const url = accessToken
-    ? `${apiBase()}/api/meals`
-    : `${apiBase()}/api/meals?user_id=${encodeURIComponent(userId || '')}`;
-
-  if (!accessToken && !userId) return { meals: [], configured: false };
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const url = `${apiBase()}/api/meals`;
 
   const res = await fetch(url, { headers });
   const data = await res.json().catch(() => ({}));
@@ -93,13 +91,11 @@ export async function listMeals({ accessToken, userId } = {}) {
   return data;
 }
 
-export async function getMeal({ accessToken, userId, mealId }) {
-  const headers = {};
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+export async function getMeal({ accessToken, mealId }) {
+  if (!accessToken) throw new Error('Authentication required');
 
-  const url = accessToken
-    ? `${apiBase()}/api/meals/${encodeURIComponent(mealId)}`
-    : `${apiBase()}/api/meals/${encodeURIComponent(mealId)}?user_id=${encodeURIComponent(userId)}`;
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const url = `${apiBase()}/api/meals/${encodeURIComponent(mealId)}`;
 
   const res = await fetch(url, { headers });
   const data = await res.json().catch(() => ({}));
@@ -115,13 +111,11 @@ export async function getMeal({ accessToken, userId, mealId }) {
   return data;
 }
 
-export async function deleteMeal({ accessToken, userId, mealId }) {
-  const headers = {};
-  if (accessToken) headers.Authorization = `Bearer ${accessToken}`;
+export async function deleteMeal({ accessToken, mealId }) {
+  if (!accessToken) throw new Error('Authentication required');
 
-  const url = accessToken
-    ? `${apiBase()}/api/meals/${encodeURIComponent(mealId)}`
-    : `${apiBase()}/api/meals/${encodeURIComponent(mealId)}?user_id=${encodeURIComponent(userId)}`;
+  const headers = { Authorization: `Bearer ${accessToken}` };
+  const url = `${apiBase()}/api/meals/${encodeURIComponent(mealId)}`;
 
   const res = await fetch(url, { method: 'DELETE', headers });
   const data = await res.json().catch(() => ({}));

@@ -29,14 +29,22 @@ function DifficultyMeter({ level }) {
   );
 }
 
-export default function PlanDetail({ slug, token, onBack, onEnrolled }) {
-  const [plan, setPlan] = useState(null);
+export default function PlanDetail({ slug, token, onBack, onEnrolled, initialPlan = null }) {
+  const [plan, setPlan] = useState(initialPlan);
   const [enrollment, setEnrollment] = useState(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialPlan);
   const [enrolling, setEnrolling] = useState(false);
 
   useEffect(() => {
-    if (!slug || !token) return;
+    if (initialPlan && initialPlan.slug === slug) {
+      setPlan(initialPlan);
+      setLoading(false);
+      return;
+    }
+    if (!slug || !token) {
+      setLoading(false);
+      return;
+    }
     setLoading(true);
     getPlanDetail(token, slug)
       .then((data) => {
@@ -45,7 +53,7 @@ export default function PlanDetail({ slug, token, onBack, onEnrolled }) {
       })
       .catch((e) => console.error('Plan detail load:', e))
       .finally(() => setLoading(false));
-  }, [slug, token]);
+  }, [slug, token, initialPlan]);
 
   const handleEnroll = async () => {
     if (!plan || enrolling) return;
@@ -166,6 +174,26 @@ export default function PlanDetail({ slug, token, onBack, onEnrolled }) {
         </div>
       </div>
 
+      {Array.isArray(plan.weekly_menu) && plan.weekly_menu.length > 0 && (
+        <div className="rounded-2xl border border-foreground/10 bg-card p-5 space-y-4">
+          <h2 className="text-base font-semibold">Sample weekly menu</h2>
+          {plan.weekly_menu.slice(0, 7).map((day) => (
+            <div key={day.day} className="border-t border-foreground/5 pt-3 first:border-0 first:pt-0">
+              <p className="text-xs font-mono uppercase tracking-widest text-muted mb-2">{day.day}</p>
+              <div className="space-y-2">
+                {(day.meals || []).map((meal, i) => (
+                  <div key={i} className="text-sm">
+                    <span className="font-medium capitalize">{meal.slot}: </span>
+                    <span>{meal.name}</span>
+                    {meal.description && <p className="text-xs text-muted mt-0.5">{meal.description}</p>}
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex items-center justify-between text-sm text-muted px-1">
         <span className="flex items-center gap-1"><Users size={14} /> {plan.enrollment_count || 0} users following</span>
         {plan.primary_organ && (
@@ -180,7 +208,7 @@ export default function PlanDetail({ slug, token, onBack, onEnrolled }) {
         <button type="button" onClick={onEnrolled} className="btn-primary w-full h-14 text-base flex items-center justify-center gap-2">
           Continue Plan <ChevronRight size={20} />
         </button>
-      ) : (
+      ) : token && plan.plan_id ? (
         <button
           type="button"
           onClick={handleEnroll}
@@ -190,6 +218,8 @@ export default function PlanDetail({ slug, token, onBack, onEnrolled }) {
           {enrolling ? <Loader2 size={20} className="animate-spin" /> : <Clock size={20} />}
           {enrolling ? 'Enrolling...' : `Start ${plan.duration_days}-Day Challenge`}
         </button>
+      ) : (
+        <p className="text-center text-sm text-muted">Sign in to enroll in this plan and track progress.</p>
       )}
     </div>
   );

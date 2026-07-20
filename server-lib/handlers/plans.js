@@ -1,6 +1,7 @@
 import { getSupabaseAdmin } from '../supabaseServer.js';
 import { getAuthedUserId } from '../authUser.js';
 import { generatePlanMealSuggestions } from '../planMealSuggestion.js';
+import { generateCustomNutritionPlan } from '../planGenerator.js';
 import { checkAndUnlockBadges } from '../planBadges.js';
 
 function jsonError(res, status, message, extra = {}) {
@@ -540,10 +541,69 @@ async function quitPlan(req, res) {
   return res.status(200).json({ ok: true });
 }
 
+async function generatePlan(req, res) {
+  if (req.method !== 'POST') {
+    res.setHeader('Allow', 'POST');
+    return jsonError(res, 405, 'Method not allowed');
+  }
+
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) return jsonError(res, 500, 'GEMINI_API_KEY missing');
+
+  const supabase = getSupabaseAdmin();
+  const { preferences = '', profile = {} } = req.body || {};
+
+  try {
+    const generated = await generateCustomNutritionPlan({ profile, preferences, apiKey });
+
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('nutrition_plans')
+        .insert({
+          slug: generated.slug,
+          name: generated.name,
+          category: generated.category,
+          tagline: generated.tagline,
+          description: generated.description,
+          inspired_by: generated.inspired_by,
+          protein_pct: generated.protein_pct,
+          carbs_pct: generated.carbs_pct,
+          fat_pct: generated.fat_pct,
+          meals_per_day: generated.meals_per_day,
+          meal_timing: generated.meal_timing,
+          key_foods: generated.key_foods,
+          avoid_foods: generated.avoid_foods,
+          duration_days: generated.duration_days,
+          difficulty: generated.difficulty,
+          strictness: generated.strictness,
+          primary_organ: generated.primary_organ,
+          secondary_organ: generated.secondary_organ,
+          expected_results: generated.expected_results,
+        })
+        .select('*')
+        .single();
+
+      if (error) {
+        console.warn('Plan DB insert failed, returning generated plan only:', error.message);
+      } else if (data) {
+        return res.status(200).json({
+          plan: { ...data, weekly_menu: generated.weekly_menu, is_ai_generated: true },
+        });
+      }
+    }
+
+    return res.status(200).json({ plan: generated });
+  } catch (err) {
+    console.error('Generate plan error:', err);
+    return jsonError(res, 500, err.message || 'Failed to generate plan');
+  }
+}
+
 export async function handlePlans(req, res, tail) {
   const [action, param] = tail || [];
 
   if (!action && req.method === 'GET') return listPlans(req, res);
+  if (action === 'generate' && req.method === 'POST') return generatePlan(req, res);
   if (action === 'enroll' && req.method === 'POST') return enrollInPlan(req, res);
   if (action === 'active' && req.method === 'GET') return getActivePlan(req, res);
   if (action === 'progress' && req.method === 'GET') return getProgress(req, res);
@@ -552,7 +612,7 @@ export async function handlePlans(req, res, tail) {
   if (action === 'achievements' && req.method === 'GET') return getAchievements(req, res);
   if (action === 'quit' && req.method === 'POST') return quitPlan(req, res);
 
-  if (action && !['enroll', 'active', 'progress', 'complete-meal', 'suggest-meal', 'achievements', 'quit'].includes(action) && req.method === 'GET') {
+  if (action && !['enroll', 'active', 'progress', 'complete-meal', 'suggest-meal', 'achievements', 'quit', 'generate'].includes(action) && req.method === 'GET') {
     return getPlanDetail(req, res, action);
   }
 

@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'framer-motion';
-import { Heart, Activity, Brain, CheckCircle, AlertTriangle, Lightbulb, ShoppingCart, RefreshCw, ChevronRight } from 'lucide-react';
+import { Heart, Activity, Brain, CheckCircle, AlertTriangle, Lightbulb, ShoppingCart, RefreshCw } from 'lucide-react';
 import { generateWeeklyReport } from '../lib/claude';
+import WeekMealJournal from '../components/WeekMealJournal';
 
 const HealthBar = ({ label, icon: Icon, value, color }) => (
     <div className="space-y-3">
@@ -17,160 +18,151 @@ const HealthBar = ({ label, icon: Icon, value, color }) => (
                 className={`h-full ${color}`}
                 initial={{ width: 0 }}
                 animate={{ width: `${value * 10}%` }}
-                transition={{ duration: 1.5, ease: "easeOut" }}
+                transition={{ duration: 1.5, ease: 'easeOut' }}
             />
         </div>
     </div>
 );
 
-export default function WeeklyReport({ profile, meals = [] }) {
+export default function WeeklyReport({ profile, meals = [], onLogMeal }) {
     const [report, setReport] = useState(null);
     const [loading, setLoading] = useState(false);
-    const [error, setError] = useState(null);
+    const [reportError, setReportError] = useState(null);
 
     const weeklyMeals = useMemo(() => {
         const sevenDaysAgo = new Date();
         sevenDaysAgo.setDate(sevenDaysAgo.getDate() - 7);
-        return meals.filter(m => new Date(m.date) > sevenDaysAgo);
+        return meals.filter((m) => m.date && new Date(m.date) > sevenDaysAgo);
     }, [meals]);
 
     const fetchReport = async () => {
-        if (weeklyMeals.length < 3) {
-            setError("Please log at least 3 meals this week to generate a meaningful report.");
-            return;
-        }
+        if (weeklyMeals.length < 3) return;
         setLoading(true);
-        setError(null);
+        setReportError(null);
         try {
             const apiKey = profile.api_key || import.meta.env.VITE_ANTHROPIC_API_KEY || import.meta.env.VITE_API_KEY;
+            if (!apiKey) {
+                setReportError('Add an Anthropic API key in settings to generate AI weekly insights.');
+                return;
+            }
             const data = await generateWeeklyReport(apiKey, weeklyMeals);
             setReport(data);
-        } catch (e) {
-            setError("Failed to generate report. Please check your API key.");
+        } catch {
+            setReportError('Failed to generate AI report. Your meals are still saved below.');
         } finally {
             setLoading(false);
         }
     };
 
     useEffect(() => {
-        if (weeklyMeals.length >= 3 && !report) {
+        if (weeklyMeals.length >= 3 && !report && !reportError) {
             fetchReport();
         }
-    }, [weeklyMeals]);
-
-    if (loading) {
-        return (
-            <div className="h-[60vh] flex flex-col items-center justify-center space-y-8">
-                <div className="w-16 h-16 border-2 border-accent border-t-transparent rounded-full animate-spin" />
-                <div className="text-center space-y-2 animate-pulse">
-                    <h2 className="text-2xl italic font-sans">Synthesizing your health data...</h2>
-                    <p className="text-muted font-mono text-[10px] uppercase tracking-widest leading-relaxed">Cross-referencing nutritional markers across {weeklyMeals.length} logged meals</p>
-                </div>
-            </div>
-        );
-    }
-
-    if (error || (weeklyMeals.length < 3)) {
-        return (
-            <div className="h-[60vh] flex flex-col items-center justify-center p-12 text-center space-y-6">
-                <div className="p-6 bg-foreground/5 rounded-full text-muted">
-                    <Activity size={48} />
-                </div>
-                <div className="space-y-4 max-w-sm">
-                    <h2 className="text-3xl">Not enough data</h2>
-                    <p className="text-muted italic leading-relaxed font-sans">Nouris needs at least 3 meals from the past 7 days to identify health patterns and calculate scores.</p>
-                </div>
-                <button onClick={() => window.location.hash = ''} className="btn-primary flex items-center gap-2">
-                    LOG A MEAL <ChevronRight size={16} />
-                </button>
-            </div>
-        );
-    }
-
-    if (!report) return null;
+    }, [weeklyMeals.length]);
 
     return (
         <div className="max-w-4xl mx-auto space-y-16 pb-24">
-            <div className="space-y-4 text-center">
-                <div className="inline-block px-4 py-1 rounded-full border border-accent/20 text-accent font-mono text-[10px] uppercase tracking-[0.2em] mb-4 shadow-xl shadow-accent/5">
-                    Nutrition Scientific Report
-                </div>
-                <h1 className="text-6xl text-balance leading-tight">Your Health Intelligence</h1>
-                <p className="text-muted font-sans italic text-xl">Aggregated insights for week {new Date().toLocaleDateString(undefined, { month: 'short', day: 'numeric' })}.</p>
-            </div>
+            <WeekMealJournal meals={meals} onLogMeal={onLogMeal} />
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-20">
-                <div className="space-y-12">
-                    <div className="space-y-8">
-                        <h3 className="font-mono text-xs uppercase tracking-[0.3em] text-accent">Health Dimensions</h3>
-                        <div className="space-y-10">
-                            <HealthBar label="Heart Health" icon={Heart} value={report.heart_health} color="bg-foreground" />
-                            <HealthBar label="Metabolic Health" icon={Activity} value={report.metabolic_health} color="bg-foreground" />
-                            <HealthBar label="Brain Health" icon={Brain} value={report.brain_health} color="bg-foreground" />
+            {weeklyMeals.length >= 3 && (
+                <div className="border-t border-foreground/10 pt-12 space-y-8">
+                    <div className="space-y-2 text-center">
+                        <div className="inline-block px-4 py-1 rounded-full border border-accent/20 text-accent font-mono text-[10px] uppercase tracking-[0.2em]">
+                            AI Weekly Insights
                         </div>
+                        <h2 className="text-3xl font-semibold tracking-tight">Health intelligence</h2>
+                        <p className="text-sm text-muted">
+                            Patterns across {weeklyMeals.length} meals this week
+                        </p>
                     </div>
 
-                    <div className="space-y-6">
-                        <h3 className="font-mono text-xs uppercase tracking-[0.3em] text-accent">Detected Patterns</h3>
-                        <div className="space-y-4">
-                            {report.patterns.map((p, i) => (
-                                <div key={i} className="flex gap-4 items-start font-sans italic text-lg leading-snug">
-                                    <span className="text-accent">◈</span> {p}
+                    {loading && (
+                        <div className="py-16 flex flex-col items-center gap-4">
+                            <div className="w-12 h-12 border-2 border-accent border-t-transparent rounded-full animate-spin" />
+                            <p className="text-sm text-muted italic">Synthesizing your health data...</p>
+                        </div>
+                    )}
+
+                    {reportError && (
+                        <div className="rounded-2xl border border-foreground/10 bg-card p-6 text-center space-y-3">
+                            <p className="text-sm text-muted">{reportError}</p>
+                            <button type="button" onClick={fetchReport} className="btn-secondary text-sm">
+                                Try again
+                            </button>
+                        </div>
+                    )}
+
+                    {report && !loading && (
+                        <>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                                <div className="space-y-10">
+                                    <div className="space-y-8">
+                                        <h3 className="font-mono text-xs uppercase tracking-[0.3em] text-accent">Health dimensions</h3>
+                                        <div className="space-y-8">
+                                            <HealthBar label="Heart Health" icon={Heart} value={report.heart_health} color="bg-foreground" />
+                                            <HealthBar label="Metabolic Health" icon={Activity} value={report.metabolic_health} color="bg-foreground" />
+                                            <HealthBar label="Brain Health" icon={Brain} value={report.brain_health} color="bg-foreground" />
+                                        </div>
+                                    </div>
+                                    <div className="space-y-4">
+                                        <h3 className="font-mono text-xs uppercase tracking-[0.3em] text-accent">Detected patterns</h3>
+                                        {report.patterns.map((p, i) => (
+                                            <div key={i} className="flex gap-3 text-sm italic text-foreground/90">
+                                                <span className="text-accent">◈</span> {p}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
-                </div>
-
-                <div className="space-y-12 bg-card-muted/30 p-10 rounded-[40px] border border-foreground/5 backdrop-blur-sm self-start">
-                    <div className="space-y-6">
-                        <h3 className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-foreground">
-                            <CheckCircle size={14} /> Weekly Wins
-                        </h3>
-                        <ul className="space-y-3">
-                            {report.top_wins.map((w, i) => (
-                                <li key={i} className="text-sm font-sans italic leading-relaxed text-foreground/80 pr-4">“{w}”</li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <div className="space-y-6 pt-6 border-t border-foreground/5">
-                        <h3 className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-foreground">
-                            <AlertTriangle size={14} /> Strategic Issues
-                        </h3>
-                        <ul className="space-y-3">
-                            {report.top_issues.map((iss, i) => (
-                                <li key={i} className="text-sm font-sans italic leading-relaxed text-foreground/80 opacity-80 pr-4">“{iss}”</li>
-                            ))}
-                        </ul>
-                    </div>
-
-                    <div className="pt-8 border-t border-foreground/5 space-y-6">
-                        <h3 className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-accent">
-                            <ShoppingCart size={14} /> Intelligence Grocery List
-                        </h3>
-                        <div className="grid grid-cols-1 gap-3">
-                            {report.grocery_suggestions.map((item, i) => (
-                                <div key={i} className="flex items-center gap-3 p-3 bg-card border border-foreground/5 rounded-xl group hover:border-accent group transition-all">
-                                    <div className="w-5 h-5 rounded-md border-2 border-foreground/10 group-hover:border-accent transition-colors shrink-0" />
-                                    <span className="text-xs font-mono uppercase tracking-widest text-muted group-hover:text-foreground">{item}</span>
+                                <div className="space-y-8 bg-card-muted/30 p-8 rounded-3xl border border-foreground/5">
+                                    <div className="space-y-4">
+                                        <h3 className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em]">
+                                            <CheckCircle size={14} /> Weekly wins
+                                        </h3>
+                                        <ul className="space-y-2 text-sm italic text-foreground/80">
+                                            {report.top_wins.map((w, i) => (
+                                                <li key={i}>“{w}”</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div className="space-y-4 pt-4 border-t border-foreground/5">
+                                        <h3 className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em]">
+                                            <AlertTriangle size={14} /> Strategic issues
+                                        </h3>
+                                        <ul className="space-y-2 text-sm italic text-foreground/70">
+                                            {report.top_issues.map((iss, i) => (
+                                                <li key={i}>“{iss}”</li>
+                                            ))}
+                                        </ul>
+                                    </div>
+                                    <div className="space-y-3 pt-4 border-t border-foreground/5">
+                                        <h3 className="flex items-center gap-2 font-mono text-xs uppercase tracking-[0.3em] text-accent">
+                                            <ShoppingCart size={14} /> Grocery list
+                                        </h3>
+                                        {report.grocery_suggestions.map((item, i) => (
+                                            <div key={i} className="text-xs font-mono uppercase tracking-wider text-muted p-2 rounded-lg bg-card border border-foreground/5">
+                                                {item}
+                                            </div>
+                                        ))}
+                                    </div>
                                 </div>
-                            ))}
-                        </div>
-                    </div>
+                            </div>
+                            <div className="p-10 bg-accent text-white rounded-3xl text-center space-y-4">
+                                <span className="text-[10px] font-mono uppercase tracking-[0.3em] opacity-80">Focus for next week</span>
+                                <h3 className="text-2xl leading-snug">{report.this_week_focus}</h3>
+                                <button type="button" onClick={fetchReport} className="inline-flex items-center gap-2 text-xs font-mono uppercase tracking-widest opacity-80 hover:opacity-100">
+                                    <RefreshCw size={14} /> Re-analyze
+                                </button>
+                            </div>
+                        </>
+                    )}
                 </div>
-            </div>
+            )}
 
-            <div className="p-12 bg-accent text-white rounded-[40px] relative overflow-hidden flex flex-col items-center text-center space-y-6 shadow-2xl shadow-accent/20">
-                <div className="absolute top-0 right-0 p-8 opacity-20 transform rotate-12 scale-150">
-                    <Lightbulb size={120} />
-                </div>
-                <span className="bg-white/10 px-4 py-1 rounded-full text-[10px] font-mono uppercase tracking-[0.3em] backdrop-blur-md">Focus for Next Week</span>
-                <h2 className="text-4xl text-balance leading-tight max-w-2xl px-4">{report.this_week_focus}</h2>
-                <button onClick={fetchReport} className="flex items-center gap-2 text-xs font-mono uppercase tracking-widest hover:underline pt-4 opacity-80">
-                    <RefreshCw size={14} /> RE-ANALYZE WITH LATEST DATA
-                </button>
-            </div>
+            {weeklyMeals.length > 0 && weeklyMeals.length < 3 && (
+                <p className="text-center text-sm text-muted border-t border-foreground/10 pt-8">
+                    Log {3 - weeklyMeals.length} more meal{3 - weeklyMeals.length === 1 ? '' : 's'} this week to unlock AI health insights.
+                </p>
+            )}
         </div>
     );
 }

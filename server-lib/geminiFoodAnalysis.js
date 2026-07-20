@@ -16,6 +16,19 @@ const analysisPrompt = `Analyze this food image and return ONLY in this exact JS
 {
   "foods": ["item 1", "item 2"],
   "calories": 650,
+  "macros": {
+    "protein_g": 28,
+    "carbs_g": 45,
+    "fat_g": 32,
+    "fiber_g": 4,
+    "sugar_g": 8,
+    "sodium_mg": 920,
+    "saturated_fat_g": 12,
+    "omega3_mg": 50
+  },
+  "healthScore": 4,
+  "healthScoreReason": "Fried items, high sodium, low fiber — occasional treat not daily food",
+  "confidence": 78,
   "quickSummary": {
     "cardiovascular": "• High saturated fat -> arterial plaque risk\\n• Sodium 800mg -> blood pressure elevation",
     "metabolic": "• Refined carbs -> insulin spike -> fat storage\\n• Low fiber -> poor blood sugar control",
@@ -32,6 +45,15 @@ const analysisPrompt = `Analyze this food image and return ONLY in this exact JS
     "Add vegetables (doubles fiber, reduces absorption speed)"
   ]
 }
+
+SCORING RULES (healthScore 1-10, be honest and strict):
+- 9-10: Whole foods, high fiber, lean protein, minimal processing (e.g. grilled fish + vegetables)
+- 7-8: Balanced home-cooked meals with minor issues
+- 5-6: Mixed meals with some processed elements
+- 3-4: Fast food, fried food, burger+fries, pizza, sugary drinks, high sodium
+- 1-2: Ultra-processed, very high sugar/fat/sodium combo
+- Burger, fries, fried chicken, milkshakes, donuts should typically score 2-5, NEVER 9-10
+- Estimate realistic macros from visible portions — do not leave macros at zero
 
 RULES:
 - Each bullet point MAX 10-15 words
@@ -69,23 +91,61 @@ function linesFromBullets(value, fallback = []) {
     .filter(Boolean);
 }
 
+function computeHealthScore(detailed, nutrition, foodNames) {
+  if (detailed?.healthScore != null && !Number.isNaN(Number(detailed.healthScore))) {
+    return Math.min(10, Math.max(1, Math.round(Number(detailed.healthScore))));
+  }
+
+  const foodStr = foodNames.join(' ').toLowerCase();
+  let score = 6.5;
+
+  const junkPattern =
+    /burger|fries|fried|pizza|donut|doughnut|milkshake|soda|nachos|hot\s*dog|chips|candy|pastry|deep[\s-]?fried|fast\s*food|bacon|processed/;
+  const healthyPattern =
+    /salad|vegetable|broccoli|spinach|kale|grilled|steamed|salmon|quinoa|lentil|bean|fruit|berry|oat/i;
+
+  if (junkPattern.test(foodStr)) score -= 2.5;
+  if (healthyPattern.test(foodStr)) score += 1;
+
+  if (nutrition.sodium_mg > 1000) score -= 2;
+  else if (nutrition.sodium_mg > 700) score -= 1.5;
+  else if (nutrition.sodium_mg > 500) score -= 0.5;
+
+  if (nutrition.sugar_g > 30) score -= 2;
+  else if (nutrition.sugar_g > 20) score -= 1;
+
+  if (nutrition.saturated_fat_g > 15) score -= 1.5;
+  else if (nutrition.saturated_fat_g > 8) score -= 0.5;
+
+  if (nutrition.fiber_g >= 8) score += 1;
+  else if (nutrition.fiber_g < 3) score -= 0.5;
+
+  if (nutrition.protein_g >= 25) score += 0.5;
+
+  if (nutrition.calories > 900) score -= 1;
+  else if (nutrition.calories > 700) score -= 0.5;
+
+  return Math.min(10, Math.max(1, Math.round(score)));
+}
+
 export function toNourisShape(detailed) {
   const foods = Array.isArray(detailed?.foods) ? detailed.foods : [];
   const names = foods
     .map((f) => (typeof f === 'string' ? f : f?.name))
     .filter(Boolean);
   const mealName = names.length ? names.join(', ') : 'Food analysis';
-  const calories = Math.max(0, Number(detailed?.calories || 0));
+  const macros = detailed?.macros || {};
+  const calories = Math.max(0, Number(detailed?.calories || macros.calories || 0));
   const nutrition = {
     calories,
-    protein_g: 0,
-    carbs_g: 0,
-    fat_g: 0,
-    fiber_g: 0,
-    sugar_g: 0,
-    sodium_mg: 0,
-    saturated_fat_g: 0,
-    omega3_mg: 0,
+    protein_g: Math.max(0, Number(macros.protein_g ?? macros.protein ?? 0)),
+    carbs_g: Math.max(0, Number(macros.carbs_g ?? macros.carbs ?? 0)),
+    fat_g: Math.max(0, Number(macros.fat_g ?? macros.fat ?? 0)),
+    fiber_g: Math.max(0, Number(macros.fiber_g ?? macros.fiber ?? 0)),
+    sugar_g: Math.max(0, Number(macros.sugar_g ?? macros.sugar ?? 0)),
+    sodium_mg: Math.max(0, Number(macros.sodium_mg ?? macros.sodium ?? 0)),
+    saturated_fat_g: Math.max(0, Number(macros.saturated_fat_g ?? macros.saturated_fat ?? 0)),
+    omega3_mg: Math.max(0, Number(macros.omega3_mg ?? macros.omega3 ?? 0)),
   };
   const glycemic_load =
     nutrition.carbs_g > 50 && nutrition.fiber_g < 3
@@ -94,19 +154,7 @@ export function toNourisShape(detailed) {
         ? 'low'
         : 'medium';
 
-  const healthScore = Math.min(
-    10,
-    Math.max(
-      1,
-      Math.round(
-        10 -
-          (nutrition.sugar_g > 25 ? 1 : nutrition.sugar_g > 15 ? 0.5 : 0) -
-          (nutrition.sodium_mg > 900 ? 1 : nutrition.sodium_mg > 500 ? 0.5 : 0) +
-          (nutrition.protein_g > 20 ? 0.5 : 0) +
-          (nutrition.fiber_g > 5 ? 0.5 : 0)
-      )
-    )
-  );
+  const healthScore = computeHealthScore(detailed, nutrition, names);
 
   const quick = detailed?.quickSummary || {};
   const timeline = detailed?.timelineImpact || {};
@@ -151,6 +199,7 @@ export function toNourisShape(detailed) {
     meal_pattern_flags: [],
     health_score: healthScore,
     score_reasoning: [
+      detailed?.healthScoreReason || `Health score ${healthScore}/10`,
       `Estimated ${nutrition.calories} kcal`,
       `Carbs ${nutrition.carbs_g}g, sugar ${nutrition.sugar_g}g`,
       `Protein ${nutrition.protein_g}g, fiber ${nutrition.fiber_g}g`,

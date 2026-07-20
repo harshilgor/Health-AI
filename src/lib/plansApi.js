@@ -93,3 +93,14 @@ export async function quitPlan(token) {
   if (!res.ok) throw new Error(data.error || `Quit failed (${res.status})`);
   return data;
 }
+
+export async function generateCustomPlan(profile, preferences) {
+  const res = await fetch(`${apiBase()}/api/plans/generate`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ profile, preferences }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || `Plan generation failed (${res.status})`);
+  return data.plan;
+}

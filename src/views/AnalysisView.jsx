@@ -508,7 +508,7 @@ export default function AnalysisView({
                             onClick={handleSave}
                             className="btn-primary flex items-center gap-3 px-12 group"
                         >
-                            Continue <ChevronRight size={18} className="transition-transform group-hover:translate-x-1" />
+                            View on Week tab <ChevronRight size={18} className="transition-transform group-hover:translate-x-1" />
                         </button>
                     ) : !isLogged ? (
                         <button
