@@ -240,7 +240,8 @@ export default function App() {
                     e.code === 'STORAGE_NOT_CONFIGURED' ||
                     e.status === 503 ||
                     e.status === 401 ||
-                    e.status === 403
+                    e.status === 403 ||
+                    e.status === 404
                 ) {
                     const result = await analyzeMealWithGemini(base64, mediaType);
                     setAnalysisResult(result);
