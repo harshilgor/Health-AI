@@ -12,6 +12,7 @@ import PlanDetail from './views/PlanDetail';
 import ActivePlanDashboard from './views/ActivePlanDashboard';
 import PlanProgressReport from './views/PlanProgressReport';
 import { createMeal, listMeals, apiMealToLocal } from './lib/mealsApi';
+import { analyzeMealWithGemini } from './lib/geminiClient';
 import { fetchGarden } from './lib/gardenApi';
 import { listPlans as fetchPlans, getActivePlan, quitPlan, completeMealForPlan } from './lib/plansApi';
 import { supabase, supabaseConfigured } from './lib/supabaseClient';
@@ -23,9 +24,17 @@ import { Camera, Calendar, Activity, Loader2, Sparkles, X, LogOut, User, Sprout,
 import { motion, AnimatePresence } from 'framer-motion';
 
 const PulseBackground = () => (
-    <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden">
+    <div className="fixed inset-0 pointer-events-none -z-10 overflow-hidden bg-background">
         <div className="absolute top-1/4 -right-1/4 w-[600px] h-[600px] bg-foreground/[0.02] rounded-full blur-[100px]" />
         <div className="absolute -bottom-1/4 -left-1/4 w-[500px] h-[500px] bg-foreground/[0.02] rounded-full blur-[80px]" />
+    </div>
+);
+
+const AppLoadingScreen = ({ message = 'Loading…' }) => (
+    <div className="min-h-screen bg-background text-foreground flex flex-col items-center justify-center gap-4 px-6">
+        <PulseBackground />
+        <Loader2 size={28} className="animate-spin text-foreground/70" strokeWidth={1.5} />
+        <p className="text-sm text-muted">{message}</p>
     </div>
 );
 
@@ -143,19 +152,32 @@ export default function App() {
         }
 
         let isCancelled = false;
+        const safetyTimer = setTimeout(() => {
+            if (!isCancelled) setAuthLoading(false);
+        }, 8000);
 
-        supabase.auth.getSession().then(({ data }) => {
-            if (isCancelled) return;
-            setSession(data?.session || null);
-            setAuthLoading(false);
-        });
+        supabase.auth.getSession()
+            .then(({ data }) => {
+                if (isCancelled) return;
+                setSession(data?.session || null);
+                setAuthLoading(false);
+            })
+            .catch((err) => {
+                console.error('Failed to restore session:', err);
+                if (!isCancelled) {
+                    setSession(null);
+                    setAuthLoading(false);
+                }
+            });
 
         const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, newSession) => {
             setSession(newSession || null);
+            setAuthLoading(false);
         });
 
         return () => {
             isCancelled = true;
+            clearTimeout(safetyTimer);
             subscription?.unsubscribe();
         };
     }, []);
@@ -199,26 +221,62 @@ export default function App() {
         setAnalysisMeta(null);
         setAnalysisImage(base64);
 
+        const showAnalysisOnly = (analysis, { storageUnavailable = false } = {}) => {
+            setAnalysisResult(analysis);
+            setAnalysisImage(base64);
+            setAnalysisMeta({
+                fromApi: false,
+                savedToJournal: false,
+                analysisOnly: true,
+                storageUnavailable,
+                mealId: null,
+            });
+            setLastGardenUpdate(null);
+        };
+
         try {
-                const created = await createMeal({
-                    accessToken: session.access_token,
-                    base64Image: base64,
-                    mediaType,
-                    mealType,
-                    location,
-                });
-                const localRow = apiMealToLocal(created);
-                setRemoteMeals((prev) => [
-                    localRow,
-                    ...prev.filter((x) => x.meal_id !== localRow.meal_id),
-                ]);
-                setMealsApiConfigured(true);
-                setAnalysisResult(created.analysis);
-                setAnalysisImage(created.image_url || base64);
-                setAnalysisMeta({ fromApi: true, mealId: created.meal_id, savedToJournal: true });
-                setLastGardenUpdate(created.garden_update || null);
-                loadGarden();
+            const created = await createMeal({
+                accessToken: session.access_token,
+                base64Image: base64,
+                mediaType,
+                mealType,
+                location,
+            });
+            const localRow = apiMealToLocal(created);
+            setRemoteMeals((prev) => [
+                localRow,
+                ...prev.filter((x) => x.meal_id !== localRow.meal_id),
+            ]);
+            setMealsApiConfigured(true);
+            setAnalysisResult(created.analysis);
+            setAnalysisImage(created.image_url || base64);
+            setAnalysisMeta({ fromApi: true, mealId: created.meal_id, savedToJournal: true });
+            setLastGardenUpdate(created.garden_update || null);
+            loadGarden();
         } catch (err) {
+            const storageUnavailable =
+                err?.code === 'STORAGE_NOT_CONFIGURED' ||
+                (err?.status === 503 && /storage|supabase/i.test(String(err?.message || '')));
+
+            if (storageUnavailable) {
+                try {
+                    const analysis = await analyzeMealWithGemini(base64, mediaType);
+                    showAnalysisOnly(analysis, { storageUnavailable: true });
+                    return;
+                } catch (fallbackErr) {
+                    console.error('Analysis fallback failed:', fallbackErr);
+                    setError(
+                        fallbackErr?.message ||
+                            'Meal storage is not configured and the analysis fallback failed. Check GEMINI_API_KEY on the server.'
+                    );
+                    setAnalysisResult(null);
+                    setAnalysisImage(null);
+                    setAnalysisMeta(null);
+                    setLastGardenUpdate(null);
+                    return;
+                }
+            }
+
             console.error(err);
             setError(
                 err?.message ||
@@ -233,12 +291,60 @@ export default function App() {
         }
     };
 
-    const saveMeal = () => {
+    const clearAnalysisState = () => {
         setAnalysisResult(null);
         setAnalysisImage(null);
         setAnalysisMeta(null);
         setLastGardenUpdate(null);
-        setActiveTab('week');
+    };
+
+    const saveMeal = async (payload) => {
+        if (analysisMeta?.savedToJournal || payload?.skipLocal) {
+            clearAnalysisState();
+            setActiveTab('week');
+            return;
+        }
+
+        const token = session?.access_token;
+        const image = originalImageRef.current || analysisImage;
+        if (!token || !image) {
+            setError('Sign in and analyze a meal before saving to your journal.');
+            return;
+        }
+
+        setIsAnalyzing(true);
+        setError(null);
+        try {
+            const created = await createMeal({
+                accessToken: token,
+                base64Image: image,
+                mediaType: 'image/jpeg',
+                mealType: lastAnalyzeOpts.mealType,
+                location: lastAnalyzeOpts.location,
+            });
+            const localRow = apiMealToLocal(created);
+            setRemoteMeals((prev) => [
+                localRow,
+                ...prev.filter((x) => x.meal_id !== localRow.meal_id),
+            ]);
+            setMealsApiConfigured(true);
+            setLastGardenUpdate(created.garden_update || null);
+            loadGarden();
+            clearAnalysisState();
+            setActiveTab('week');
+        } catch (err) {
+            console.error(err);
+            const storageUnavailable =
+                err?.code === 'STORAGE_NOT_CONFIGURED' ||
+                (err?.status === 503 && /storage|supabase/i.test(String(err?.message || '')));
+            setError(
+                storageUnavailable
+                    ? 'Analysis worked, but meal storage is not configured. Add SUPABASE_SERVICE_ROLE_KEY to your server environment (and Vercel) to save meals to your journal.'
+                    : err?.message || 'Could not save this meal to your journal. Try again.'
+            );
+        } finally {
+            setIsAnalyzing(false);
+        }
     };
 
     const saveSymptom = (symptomData) => {
@@ -379,7 +485,7 @@ export default function App() {
     }, [session, profile, envApiKey]);
 
     if (authLoading) {
-        return <PulseBackground />;
+        return <AppLoadingScreen message="Starting Nouris…" />;
     }
 
     if (!session) {
@@ -392,7 +498,7 @@ export default function App() {
     }
 
     if (session && userDataLoading) {
-        return <PulseBackground />;
+        return <AppLoadingScreen message="Loading your profile…" />;
     }
 
     if (!profile) {
@@ -508,6 +614,7 @@ export default function App() {
                             data={analysisResult}
                             image={analysisImage}
                             alreadySavedToJournal={!!analysisMeta?.fromApi || !!analysisMeta?.savedToJournal}
+                            storageUnavailable={!!analysisMeta?.storageUnavailable}
                             gardenUpdate={lastGardenUpdate}
                             onViewGarden={() => {
                                 setLastGardenUpdate(null);

@@ -1,5 +1,8 @@
 import fs from 'fs/promises';
 import path from 'path';
+import { loadEnvFiles } from './scripts/loadEnv.mjs';
+
+loadEnvFiles();
 
 const PRIMARY_MODEL = 'gemini-2.5-flash';
 const FALLBACK_MODEL = 'gemini-2.0-flash-lite';

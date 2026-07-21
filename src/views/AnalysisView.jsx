@@ -101,6 +101,7 @@ export default function AnalysisView({
     onSave,
     onCancel,
     alreadySavedToJournal = false,
+    storageUnavailable = false,
     gardenUpdate = null,
     onViewGarden,
     hasActivePlan = false,
@@ -140,6 +141,24 @@ export default function AnalysisView({
                         ))}
                     </ul>
                 </div>
+            )}
+
+            {/* Storage unavailable — analysis-only mode */}
+            {storageUnavailable && !alreadySavedToJournal && (
+                <motion.div
+                    initial={{ opacity: 0, y: 8 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    className="p-4 bg-amber-500/10 border border-amber-500/30 rounded-xl text-amber-950 text-sm flex items-start gap-3"
+                >
+                    <AlertCircle size={16} className="shrink-0 mt-0.5" />
+                    <div className="text-left">
+                        <p className="font-medium">Preview mode</p>
+                        <p className="mt-1 text-amber-900/80">
+                            Analysis is working, but meal storage is not fully configured on the server.
+                            Add <code className="rounded bg-amber-500/10 px-1">SUPABASE_SERVICE_ROLE_KEY</code> to save meals to your journal.
+                        </p>
+                    </div>
+                </motion.div>
             )}
 
             {/* Top Banner for Low Confidence */}

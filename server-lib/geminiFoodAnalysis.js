@@ -64,14 +64,23 @@ RULES:
 - Quantify when possible (percentages, numbers)`;
 
 export function parseGeminiJSON(text) {
-  const trimmed = text.trim();
+  let trimmed = String(text || '').trim();
   if (!trimmed) return {};
+
+  // Strip markdown code fences Gemini often wraps around JSON.
+  const fenced = trimmed.match(/^```(?:json)?\s*([\s\S]*?)\s*```$/i);
+  if (fenced) trimmed = fenced[1].trim();
+
   try {
     return JSON.parse(trimmed);
   } catch {
     const match = trimmed.match(/\{[\s\S]*\}/);
     if (match) {
-      return JSON.parse(match[0]);
+      try {
+        return JSON.parse(match[0]);
+      } catch {
+        throw new Error('Gemini returned malformed JSON.');
+      }
     }
     throw new Error('Gemini returned non-JSON output.');
   }
@@ -280,6 +289,16 @@ export async function analyzeFoodImage(cleanBase64, mediaType, apiKey) {
 
   const result = await response.json();
   const text = result?.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  if (!text.trim()) {
+    const blockReason = result?.candidates?.[0]?.finishReason || result?.promptFeedback?.blockReason;
+    const err = new Error(
+      blockReason
+        ? `Gemini could not analyze this image (${blockReason}). Try a clearer photo.`
+        : 'Gemini returned an empty analysis. Try again with a clearer food photo.'
+    );
+    err.status = 422;
+    throw err;
+  }
   const detailed = parseGeminiJSON(text);
   const nouris = toNourisShape(detailed);
   return { detailed, nouris };
