@@ -19,6 +19,7 @@ import { supabase, supabaseConfigured } from './lib/supabaseClient';
 import { getProfile, saveProfile } from './lib/profileApi';
 import { listSymptoms, createSymptom } from './lib/symptomsApi';
 import MarketingLanding from './views/MarketingLanding';
+import ProfileView from './views/ProfileView';
 import { getAuthRedirectUrl } from './lib/authRedirect';
 import { Camera, Calendar, Activity, Loader2, Sparkles, X, LogOut, User, Sprout, BarChart3, Target } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -542,21 +543,35 @@ export default function App() {
                         <NavItem id="week" active={activeTab === 'week'} label="Week" icon={Calendar} onClick={setActiveTab} />
                         <NavItem id="symptoms" active={activeTab === 'symptoms'} label="Symptoms" icon={Activity} onClick={setActiveTab} />
                         <NavItem id="plans" active={activeTab === 'plans'} label="Plans" icon={Target} onClick={setActiveTab} />
+                        <NavItem id="profile" active={activeTab === 'profile'} label="Profile" icon={User} onClick={setActiveTab} />
                     </nav>
                     <div className="mt-auto pt-6 border-t border-foreground/[0.06]">
-                        <p className="text-xs text-muted truncate">{profile.goal}</p>
-                        <p className="text-xs text-foreground/70 mt-0.5">{profile.age}y · {profile.sex}</p>
+                        <button
+                            type="button"
+                            onClick={() => setActiveTab('profile')}
+                            className="w-full text-left rounded-xl p-2 -mx-2 hover:bg-foreground/[0.03] transition-colors"
+                        >
+                            <p className="text-xs text-muted truncate">{profile.goal}</p>
+                            <p className="text-xs text-foreground/70 mt-0.5">
+                                {profile.age}y · {profile.sex}
+                                {profile.weight_kg ? ` · ${profile.weight_kg}kg` : ''}
+                            </p>
+                        </button>
 
                         {supabase && (
                             <div className="mt-4 space-y-2">
                                 {session ? (
                                     <div className="text-xs text-muted truncate">
-                                        <div className="flex items-center gap-2">
+                                        <button
+                                            type="button"
+                                            onClick={() => setActiveTab('profile')}
+                                            className="flex items-center gap-2 w-full text-left hover:text-foreground transition-colors"
+                                        >
                                             <User size={14} strokeWidth={1.5} />
                                             <span className="truncate">
                                                 {session?.user?.email || 'Signed in'}
                                             </span>
-                                        </div>
+                                        </button>
                                         <button
                                             onClick={handleSignOut}
                                             className="btn-secondary w-full h-9 mt-2"
@@ -670,6 +685,22 @@ export default function App() {
                             {activeTab === 'symptoms' && (
                                 <SymptomLog profile={profile} logs={symptoms} meals={displayMeals} onLog={saveSymptom} />
                             )}
+                            {activeTab === 'profile' && (
+                                <ProfileView
+                                    profile={profile}
+                                    email={session?.user?.email}
+                                    onSave={async (nextProfile) => {
+                                        const token = session?.access_token;
+                                        if (!token) throw new Error('Sign in required to save profile.');
+                                        const saved = await saveProfile(token, nextProfile);
+                                        setProfile({
+                                            ...nextProfile,
+                                            ...saved,
+                                            api_key: nextProfile.api_key || profile.api_key || '',
+                                        });
+                                    }}
+                                />
+                            )}
                             {activeTab === 'plans' && (
                                 plansSubView === 'progress' ? (
                                     <PlanProgressReport
@@ -742,6 +773,10 @@ export default function App() {
                     <button onClick={() => setActiveTab('plans')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'plans' ? 'text-foreground' : 'text-muted'}`}>
                         <Target size={20} strokeWidth={1.5} />
                         <span className="text-[10px] font-medium">Plans</span>
+                    </button>
+                    <button onClick={() => setActiveTab('profile')} className={`flex flex-col items-center gap-0.5 py-2 min-w-0 flex-1 ${activeTab === 'profile' ? 'text-foreground' : 'text-muted'}`}>
+                        <User size={20} strokeWidth={1.5} />
+                        <span className="text-[10px] font-medium">Profile</span>
                     </button>
                 </nav>
             </div>

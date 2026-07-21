@@ -63,6 +63,15 @@ RULES:
 - Maximum 2-3 bullets per category
 - Quantify when possible (percentages, numbers)`;
 
+function buildAnalysisPrompt(dietPreference = 'non_vegetarian') {
+  const dietRule =
+    dietPreference === 'vegetarian'
+      ? `\nDIET PREFERENCE: Vegetarian.\n- Improvement swaps MUST stay vegetarian (no meat, fish, poultry, seafood).\n- Prefer plant proteins, dairy, eggs, legumes, whole grains, vegetables.\n- If the plate contains meat, still analyze it honestly, but recommend vegetarian alternatives.`
+      : `\nDIET PREFERENCE: Non-vegetarian.\n- Improvement swaps may include lean meats, fish, poultry, eggs, or plant proteins as appropriate.`;
+
+  return `${analysisPrompt}${dietRule}`;
+}
+
 export function parseGeminiJSON(text) {
   let trimmed = String(text || '').trim();
   if (!trimmed) return {};
@@ -246,14 +255,17 @@ export function toNourisShape(detailed) {
  * @param {string} cleanBase64 - raw base64, no data URL prefix
  * @param {string} mediaType - e.g. image/jpeg
  * @param {string} apiKey - GEMINI_API_KEY
+ * @param {{ dietPreference?: string }} [options]
  * @returns {Promise<{ detailed: object, nouris: object }>}
  */
-export async function analyzeFoodImage(cleanBase64, mediaType, apiKey) {
+export async function analyzeFoodImage(cleanBase64, mediaType, apiKey, options = {}) {
+  const dietPreference =
+    options.dietPreference === 'vegetarian' ? 'vegetarian' : 'non_vegetarian';
   const payload = {
     contents: [
       {
         parts: [
-          { text: `${systemInstruction}\n\n${analysisPrompt}` },
+          { text: `${systemInstruction}\n\n${buildAnalysisPrompt(dietPreference)}` },
           {
             inline_data: {
               mime_type: mediaType,

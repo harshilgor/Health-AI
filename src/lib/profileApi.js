@@ -23,6 +23,9 @@ export async function saveProfile(accessToken, profile) {
     age: profile.age,
     sex: profile.sex,
     activity: profile.activity,
+    height_cm: profile.height_cm,
+    weight_kg: profile.weight_kg,
+    diet_preference: profile.diet_preference || 'non_vegetarian',
     daily_calories: profile.daily_calories,
     protein_target: profile.protein_target,
     fat_target: profile.fat_target,
@@ -43,4 +46,3 @@ export async function saveProfile(accessToken, profile) {
   if (!res.ok) throw new Error(data.error || data.message || `Failed to save profile (${res.status})`);
   return data;
 }
-

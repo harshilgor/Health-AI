@@ -2,12 +2,18 @@ const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemi
 
 export async function generatePlanMealSuggestions({
   planName, planGoal, keyFoods, avoidFoods,
-  mealSlot, remaining, restrictions, apiKey,
+  mealSlot, remaining, restrictions, dietPreference = 'non_vegetarian', apiKey,
 }) {
+  const dietRule = dietPreference === 'vegetarian'
+    ? 'STRICT DIET: Vegetarian only. Do NOT suggest any meat, poultry, fish, or seafood. Use plant proteins, dairy, and eggs only.'
+    : 'DIET: Non-vegetarian — meat, fish, poultry, eggs, and dairy are allowed.';
+
   const prompt = `You are a nutrition expert. Generate exactly 3 meal suggestions for the "${mealSlot}" slot that fit this nutrition plan.
 
 PLAN: ${planName}
 GOAL: ${planGoal}
+
+${dietRule}
 
 REMAINING MACROS FOR TODAY (this meal should contribute toward these):
 - Protein: ${remaining.protein}g remaining
@@ -17,7 +23,7 @@ REMAINING MACROS FOR TODAY (this meal should contribute toward these):
 
 PRIORITIZE THESE FOODS: ${keyFoods.join(', ')}
 AVOID THESE FOODS: ${avoidFoods.join(', ')}
-USER DIETARY RESTRICTIONS: ${restrictions}
+USER HEALTH CONDITIONS: ${restrictions}
 
 Return ONLY valid JSON (no markdown, no backticks) in this exact format:
 {
@@ -34,7 +40,7 @@ Return ONLY valid JSON (no markdown, no backticks) in this exact format:
   ]
 }
 
-planAdherence is 0-100 indicating how well the meal fits the plan requirements.
+planAdherence is 0-100 indicating how well the meal fits the plan requirements AND the diet preference.
 Sort the 3 meals from highest to lowest planAdherence.`;
 
   const res = await fetch(`${GEMINI_URL}?key=${apiKey}`, {

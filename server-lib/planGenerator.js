@@ -9,6 +9,11 @@ function slugify(text) {
 }
 
 export async function generateCustomNutritionPlan({ profile, preferences, apiKey }) {
+  const diet = profile?.diet_preference === 'vegetarian' ? 'vegetarian' : 'non_vegetarian';
+  const dietRule = diet === 'vegetarian'
+    ? 'STRICT: This user is VEGETARIAN. All key_foods, avoid_foods, meal examples, and weekly_menu must be vegetarian (no meat, fish, poultry, or seafood). Prefer dal, paneer, tofu, legumes, eggs, dairy, grains, and vegetables.'
+    : 'This user is NON-VEGETARIAN. Meat, fish, poultry, eggs, and dairy are allowed in recommendations.';
+
   const prompt = `You are an expert nutrition coach. Create a personalized 30-day nutrition plan as JSON only (no markdown).
 
 USER PROFILE:
@@ -16,8 +21,11 @@ USER PROFILE:
 - Age: ${profile?.age || 30}, Sex: ${profile?.sex || 'unknown'}
 - Activity: ${profile?.activity || 'Lightly active'}
 - Conditions: ${profile?.conditions || 'None'}
+- Diet preference: ${diet}
 - Daily calories target: ${profile?.daily_calories || 2000}
 - Protein target: ${profile?.protein_target || 125}g
+
+${dietRule}
 
 USER REQUEST:
 ${preferences || 'Build a balanced plan for sustainable health.'}

@@ -129,7 +129,19 @@ async function handleMealsCollection(req, res) {
       let detailed;
       let nouris;
       try {
-        const out = await analyzeFoodImage(b64, mediaType, apiKey);
+        let dietPreference = 'non_vegetarian';
+        try {
+          const { data: profileRow } = await supabase
+            .from('user_profiles')
+            .select('diet_preference')
+            .eq('user_id', userId)
+            .maybeSingle();
+          if (profileRow?.diet_preference === 'vegetarian') dietPreference = 'vegetarian';
+        } catch {
+          // Profile lookup is best-effort for analysis personalization.
+        }
+
+        const out = await analyzeFoodImage(b64, mediaType, apiKey, { dietPreference });
         detailed = out.detailed;
         nouris = out.nouris;
       } catch (gemErr) {

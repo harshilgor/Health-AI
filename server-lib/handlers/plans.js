@@ -485,7 +485,7 @@ async function suggestMeal(req, res) {
 
   const { data: profile } = await supabase
     .from('user_profiles')
-    .select('conditions')
+    .select('conditions,diet_preference')
     .eq('user_id', userId)
     .maybeSingle();
 
@@ -498,6 +498,7 @@ async function suggestMeal(req, res) {
       mealSlot,
       remaining,
       restrictions: profile?.conditions || 'None',
+      dietPreference: profile?.diet_preference || 'non_vegetarian',
       apiKey,
     });
     return res.status(200).json({ suggestions, mealSlot, remaining });
@@ -551,7 +552,24 @@ async function generatePlan(req, res) {
   if (!apiKey) return jsonError(res, 500, 'GEMINI_API_KEY missing');
 
   const supabase = getSupabaseAdmin();
-  const { preferences = '', profile = {} } = req.body || {};
+  const { preferences = '', profile: bodyProfile = {} } = req.body || {};
+
+  let profile = { ...bodyProfile };
+  try {
+    const userId = await getAuthedUserId(req);
+    if (userId && supabase) {
+      const { data: saved } = await supabase
+        .from('user_profiles')
+        .select('goal,conditions,age,sex,activity,diet_preference,daily_calories,protein_target,height_cm,weight_kg')
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (saved) {
+        profile = { ...saved, ...bodyProfile, diet_preference: bodyProfile.diet_preference || saved.diet_preference };
+      }
+    }
+  } catch {
+    // Guest / unauthenticated plan generation can still use body profile.
+  }
 
   try {
     const generated = await generateCustomNutritionPlan({ profile, preferences, apiKey });
